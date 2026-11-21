@@ -37,6 +37,50 @@ function ladderHtml(coin, best, ever, mine) {
   h += '</div>' + (net ? '<p class="small">A ' + coin.toUpperCase() + ' block right now needs a difficulty of ' + bigFmt(net) + ' (' + need + ' zeros), from the latest block.</p>' : '<p class="small">Waiting for the latest block to know what a block needs.</p>');
   return h + '</details>';
 }
+/* ---------- star chart: one star per block round, placed by how many zeros its best try had ---------- */
+var SC = { range: "7", who: "group", pick: -1 };
+function zf(d) { return d > 0 ? 8 + Math.log(d) / Math.log(16) : 0; }
+function starRows() {
+  var c = S.cfg || {}, host = cleanHost(c.host), now = Date.now(), lim = SC.range === "all" ? 0 : now - (+SC.range) * DAY;
+  return (S.hist || []).filter(function (r) { return r.host === host && (r.last || r.at) >= lim; }).map(function (r) {
+    var b = SC.who === "mine" ? r.myBest : r.best; return { t: r.last || r.at, b: +b || 0, h: r.height || 0 };
+  }).filter(function (r) { return r.b > 0; });
+}
+function starHtml() {
+  var c = S.cfg || {}; if (!c.host || statsKind(c) !== "ckpool" && statsKind(c) !== "publicpool") return "";
+  var rows = starRows(), net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff, need = net ? zf(net) : 0, hasMine = (S.hist || []).some(function (r) { return r.myBest > 0; });
+  var h = '<details class="card" style="--c:var(--purple)" id="starCard" open><summary><h2>Star chart</h2><div class="dim">Each star is one block round: how close its best try got</div></summary>';
+  h += '<div class="row2"><select id="scRange">' + [["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["all", "All saved"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.range ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
+  h += '<select id="scWho">' + [["group", c.login ? "Whole group" : "Our address"], ["mine", "Our miner only"]].filter(function (o) { return o[0] === "group" || hasMine; }).map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.who ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>';
+  if (!rows.length) return h + '<p class="dim">No stars yet for this pool. They fill in as GitHub checks the pool, about every 90 seconds while its job runs.</p></details>';
+  var W = 340, H = 230, L = 34, R = 8, T = 14, B = 24, t0 = Math.min.apply(null, rows.map(function (r) { return r.t; })), t1 = Math.max.apply(null, rows.map(function (r) { return r.t; }));
+  if (t1 - t0 < 3600000) { t0 = t1 - 3600000; }
+  var zs = rows.map(function (r) { return zf(r.b); }), lo = Math.floor(Math.min.apply(null, zs)) , hi = Math.ceil(Math.max(Math.max.apply(null, zs), need || 0) + 0.3);
+  if (hi - lo < 3) lo = hi - 3;
+  var X = function (t) { return L + (t - t0) / (t1 - t0 || 1) * (W - L - R); }, Y = function (z) { return T + (hi - z) / (hi - lo) * (H - T - B); };
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;margin-top:10px" id="scSvg">';
+  s += '<defs><radialGradient id="sg"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#ffe9a8"/><stop offset="1" stop-color="#b57bff" stop-opacity="0"/></radialGradient></defs>';
+  for (var z = lo; z <= hi; z++) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(z) + '" y2="' + Y(z) + '" stroke="#22222c" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (Y(z) + 4) + '" fill="#8a8da0" font-size="10" text-anchor="end">' + z + '</text>';
+  if (need) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(need) + '" y2="' + Y(need) + '" stroke="#2dff7a" stroke-width="2" stroke-dasharray="6 4"/><text x="' + (W - R) + '" y="' + (Y(need) - 5) + '" fill="#2dff7a" font-size="10" font-weight="700" text-anchor="end">BLOCK LINE</text>';
+  var best = -1; rows.forEach(function (r, i) { if (best < 0 || r.b > rows[best].b) best = i; });
+  rows.forEach(function (r, i) {
+    var x = X(r.t), y = Y(zf(r.b)), big = i === best, sz = big ? 7 : 3.2 + Math.min(2.5, (zf(r.b) - lo) / (hi - lo) * 3), sel = i === SC.pick;
+    s += '<g data-star="' + i + '" style="cursor:pointer"><circle cx="' + x + '" cy="' + y + '" r="' + (sz * 2.6) + '" fill="url(#sg)" opacity="' + (big || sel ? .9 : .45) + '"><animate attributeName="opacity" values="' + (big ? ".9;.5;.9" : ".45;.2;.45") + '" dur="' + (3 + (i % 5)) + 's" repeatCount="indefinite"/></circle>';
+    s += '<path d="M' + x + ' ' + (y - sz) + ' L' + (x + sz * .3) + ' ' + (y - sz * .3) + ' L' + (x + sz) + ' ' + y + ' L' + (x + sz * .3) + ' ' + (y + sz * .3) + ' L' + x + ' ' + (y + sz) + ' L' + (x - sz * .3) + ' ' + (y + sz * .3) + ' L' + (x - sz) + ' ' + y + ' L' + (x - sz * .3) + ' ' + (y - sz * .3) + 'Z" fill="' + (big ? "#ffd27a" : "#fff") + '"' + (sel ? ' stroke="#2dd4bf" stroke-width="1.5"' : '') + '/><circle cx="' + x + '" cy="' + y + '" r="12" fill="transparent"/></g>';
+  });
+  s += '<text x="' + L + '" y="' + (H - 6) + '" fill="#8a8da0" font-size="10">' + niceDay(t0).replace(/, \d{4}/, "") + '</text><text x="' + (W - R) + '" y="' + (H - 6) + '" fill="#8a8da0" font-size="10" text-anchor="end">' + niceDay(t1).replace(/, \d{4}/, "") + '</text></svg>';
+  h += s;
+  var p = rows[SC.pick] || rows[best];
+  h += '<div class="stat" style="margin-top:8px"><small>' + (SC.pick >= 0 && rows[SC.pick] ? "This star" : "Brightest star") + (p.h ? " &middot; block round #" + n0(p.h) : "") + '</small><b>' + zf(p.b).toFixed(1) + ' zeros &middot; ' + bigFmt(p.b) + '</b><small>' + niceDay(p.t) + (need ? ' &middot; block line is ' + need.toFixed(1) + ' zeros' : '') + '</small></div>';
+  h += '<p class="small">' + rows.length + (rows.length === 1 ? ' star' : ' stars') + ' (' + rows.length + ' rounds checked). Tap a star to see it. Rounds shorter than a check (about 90 seconds) can be missed, and the pool only shares each round\'s best try, not every try.</p>';
+  return h + '</details>';
+}
+function wireStars() {
+  var r = $("scRange"), w = $("scWho");
+  if (r) r.onchange = function () { SC.range = r.value; SC.pick = -1; r.blur(); drawAll(); };
+  if (w) w.onchange = function () { SC.who = w.value; SC.pick = -1; w.blur(); drawAll(); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-star]"), function (g) { g.onclick = function () { SC.pick = +g.getAttribute("data-star"); drawAll(); }; });
+}
 function errTxt(e) { return String((e && e.message) || e || "error").slice(0, 100); }
 
 function getJ(url, text) {
@@ -47,7 +91,8 @@ function own(path) { return getJ(path + "?t=" + Date.now()).catch(function () { 
 
 /* ---------- saved data from the GitHub job ---------- */
 function loadSaved() {
-  return Promise.all([own("config.json"), own("data/pool.json"), own("data/earned.json"), own("data/pools.json"), own("data/pooldays.json"), own("data/status.json")]).then(function (r) {
+  return Promise.all([own("config.json"), own("data/pool.json"), own("data/earned.json"), own("data/pools.json"), own("data/pooldays.json"), own("data/status.json"), own("data/poolhist.json")]).then(function (r) {
+    S.hist = Array.isArray(r[6]) ? r[6] : [];
     S.cfg = r[0]; S.pool = r[1]; S.earned = Array.isArray(r[2]) ? r[2] : []; S.pools = Array.isArray(r[3]) ? r[3] : []; S.days = r[4] || {}; S.status = r[5];
   });
 }
@@ -187,12 +232,14 @@ function statusTxt() {
 }
 function drawAll() {
   var ae = document.activeElement; if (ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && $("main").contains(ae)) { S.dirty = true; return; }
-  var open = {}; Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d, i) { open[i] = d.open; });
+  function dkey(d) { var card = d.closest("#main > *"), h = card && card.querySelector("h2"), ck = (card && card.id) || (h ? h.textContent.replace(/[^A-Za-z]/g, "").slice(0, 20) : "x"); if (d === card) return ck; return ck + ":" + Array.prototype.indexOf.call(card.querySelectorAll("details"), d); }
+  var open = {}; Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d) { open[dkey(d)] = d.open; });
   var h = '<div style="text-align:center"><button class="btn go" type="button" id="checkNow"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Checking..." : "Check now") + '</button>' + (S.checkedAt ? '<p class="small">Checked ' + ago(S.checkedAt) + '.</p>' : '') + '</div>';
-  h += poolHtml() + earnHtml() + histHtml();
+  h += poolHtml() + starHtml() + earnHtml() + histHtml();
   if (window.privateHtml) h += window.privateHtml();
   $("main").innerHTML = h;
-  Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d, i) { if (open[i] !== undefined && d.id !== "earnCard") d.open = open[i]; });
+  Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d) { var k = dkey(d); if (open[k] !== undefined && d.id !== "earnCard") d.open = open[k]; });
+  wireStars();
   if (window.privateWire) window.privateWire(); $("status").textContent = statusTxt();
   $("checkNow").onclick = checkNow;
   var fr = $("fRange"), fc = $("fCoin"), ec = $("earnCard");

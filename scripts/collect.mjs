@@ -45,20 +45,24 @@ if (cfg.host && (!last || sig(last) !== sig(cfg))) {
 }
 const poolAt = (ts) => { let p = null; for (const x of pools) if (x.from <= ts && (!p || x.from > p.from)) p = x; return p; };
 
-// 2) Pool stats.
+// 2) Pool stats. Checked SAMPLES times, 90 seconds apart, in one run (GitHub's schedule is not reliable enough on its own).
 const kind = statsKind(cfg), wallet = cfg.coin === "bch" ? normBch(cfg.bchWallet) : (cfg.btcWallet || "").trim();
 const addr = (cfg.login || "").trim() || wallet;
-const poolOut = { at: now, host: cleanHost(cfg.host), coin: cfg.coin || "", type: cfg.type || "", kind, login: cfg.login || "", d: null, err: "" };
-if (!cfg.host) poolOut.err = "no pool set";
-else if (!kind) poolOut.err = "this pool does not share stats we can read";
-else if (!addr) poolOut.err = "no wallet for this coin";
-else {
+const SAMPLES = Math.max(1, Math.min(14, Number(process.env.SAMPLES || 1)));
+const hist = read(`${DATA}/poolhist.json`, []);
+const days = read(`${DATA}/pooldays.json`, {});
+let poolOut = { at: now, host: cleanHost(cfg.host), coin: cfg.coin || "", type: cfg.type || "", kind, login: cfg.login || "", d: null, err: "" };
+async function sampleOnce() {
+  const t0 = Date.now(), out = { at: t0, host: cleanHost(cfg.host), coin: cfg.coin || "", type: cfg.type || "", kind, login: cfg.login || "", d: null, err: "" };
+  if (!cfg.host) { out.err = "no pool set"; return out; }
+  if (!kind) { out.err = "this pool does not share stats we can read"; return out; }
+  if (!addr) { out.err = "no wallet for this coin"; return out; }
   try {
     let d;
     if (kind === "ckpool") {
       const j = await get(`https://${cleanHost(cfg.host)}/users/${addr}`);
       if (j.hashrate5m === undefined) throw new Error("pool does not know this address yet");
-      const w = j.worker || [], t = now / 1000;
+      const w = j.worker || [], t = t0 / 1000;
       d = { h5m: hNum(j.hashrate5m), h1h: hNum(j.hashrate1hr), h1d: hNum(j.hashrate1d), workers: j.workers || w.length,
         live: w.filter((x) => x.lastshare && t - x.lastshare < 600 && hNum(x.hashrate5m) > 0).length,
         last: (j.lastshare || 0) * 1000, shares: +j.shares || 0, best: +j.bestshare || 0, ever: +j.bestever || 0, mine: null };
@@ -75,19 +79,38 @@ else {
       d = { h5m: +j.currentHashrate || 0, h1h: +j.hashrate || 0, h1d: 0, workers: j.workersOnline || 0, live: j.workersOnline || 0,
         last: j.stats && j.stats.lastShare ? j.stats.lastShare * 1000 : 0, shares: 0, best: 0, ever: 0, blocks: j.stats ? +j.stats.blocksFound || 0 : 0, mine: null };
     }
-    poolOut.d = d;
-    // history: every run, plus one summary per day that is kept forever
-    const hist = read(`${DATA}/poolhist.json`, []);
-    hist.push({ at: now, host: poolOut.host, coin: poolOut.coin, h5m: d.h5m, h1h: d.h1h, workers: d.workers, live: d.live, shares: d.shares, best: d.best, ever: d.ever, myH: d.mine ? d.mine.h1h : null, myBest: d.mine ? d.mine.best : null });
-    write(`${DATA}/poolhist.json`, hist.slice(-20000));
-    const days = read(`${DATA}/pooldays.json`, {});
-    const key = new Date(now).toISOString().slice(0, 10) + " " + poolOut.host, p = days[key] || { day: key.slice(0, 10), host: poolOut.host, coin: poolOut.coin, checks: 0, maxH1h: 0, best: 0, myBest: 0 };
-    p.checks++; p.maxH1h = Math.max(p.maxH1h, d.h1h || 0); p.best = Math.max(p.best, d.best || 0); if (d.mine) p.myBest = Math.max(p.myBest, d.mine.best || 0); p.last = now;
-    days[key] = p; write(`${DATA}/pooldays.json`, days);
-    log.push("pool stats saved");
-  } catch (e) { poolOut.err = String(e.message || e).slice(0, 120); log.push("pool stats failed: " + poolOut.err); }
+    // which block round this check is in
+    try {
+      if (cfg.coin === "bch") { const b = await get("https://api.blockchain.info/haskoin-store/bch/block/best?notx=true"); d.height = b.height; }
+      else d.height = Number(await get("https://mempool.space/api/blocks/tip/height", true));
+    } catch { d.height = 0; }
+    out.d = d;
+    // one record per block round: later checks in the same round keep the highest best share
+    const lastR = hist[hist.length - 1];
+    if (d.height && lastR && lastR.height === d.height && lastR.host === out.host) {
+      lastR.best = Math.max(lastR.best || 0, d.best || 0); lastR.last = t0; lastR.checks = (lastR.checks || 1) + 1;
+      if (d.mine) lastR.myBest = Math.max(lastR.myBest || 0, d.mine.best || 0);
+      lastR.h1h = d.h1h; lastR.workers = d.workers; lastR.live = d.live; lastR.ever = d.ever;
+    } else {
+      hist.push({ at: t0, last: t0, checks: 1, height: d.height || 0, host: out.host, coin: out.coin, h1h: d.h1h, workers: d.workers, live: d.live, best: d.best, ever: d.ever, myBest: d.mine ? d.mine.best : null });
+    }
+    const key = new Date(t0).toISOString().slice(0, 10) + " " + out.host, p = days[key] || { day: key.slice(0, 10), host: out.host, coin: out.coin, checks: 0, maxH1h: 0, best: 0, myBest: 0 };
+    p.checks++; p.maxH1h = Math.max(p.maxH1h, d.h1h || 0); p.best = Math.max(p.best, d.best || 0); if (d.mine) p.myBest = Math.max(p.myBest, d.mine.best || 0); p.last = t0;
+    days[key] = p;
+  } catch (e) { out.err = String(e.message || e).slice(0, 120); }
+  return out;
 }
+let okSamples = 0;
+for (let i = 0; i < SAMPLES; i++) {
+  if (i) await sleep(90000);
+  const o = await sampleOnce();
+  if (o.d || !poolOut.d) poolOut = o;
+  if (o.d) okSamples++;
+}
+write(`${DATA}/poolhist.json`, hist.slice(-50000));
+write(`${DATA}/pooldays.json`, days);
 write(`${DATA}/pool.json`, poolOut);
+log.push(`pool checks: ${okSamples} of ${SAMPLES} worked` + (poolOut.err ? ` (${poolOut.err})` : ""));
 
 // 3) Wallet payouts (BTC and BCH), each priced at the day it arrived.
 const earned = read(`${DATA}/earned.json`, []);

@@ -2,7 +2,7 @@ name: Collect mining data
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/20 * * * *"
   workflow_dispatch:
   push:
     paths:
@@ -25,6 +25,8 @@ jobs:
           node-version: 20
       - name: Fetch pool stats and wallet payouts
         run: node scripts/collect.mjs
+        env:
+          SAMPLES: ${{ github.event_name == 'schedule' && '12' || '1' }}
       - name: Save the new data
         run: |
           git config user.name "fire-salt-bot"
