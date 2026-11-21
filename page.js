@@ -44,10 +44,17 @@ var SC = { range: "7", who: "group", pick: -1 };
 function whenTxt(t) { var d = new Date(t); return MON[d.getMonth()] + " " + d.getDate() + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
 function zf(d) { return d > 0 ? 8 + Math.log(d) / Math.log(16) : 0; }
 function starRows() {
-  var c = S.cfg || {}, host = cleanHost(c.host), lim = SC.range === "all" ? 0 : Date.now() - (+SC.range) * DAY;
-  return (S.hist || []).filter(function (r) { return r.host === host && (r.last || r.at) >= lim; })
-    .map(function (r) { return { t: r.last || r.at, b: +(SC.who === "mine" ? r.myBest : r.best) || 0, h: r.height || 0 }; })
-    .filter(function (r) { return r.b > 0; }).sort(function (a, b) { return a.t - b.t; });
+  var c = S.cfg || {}, host = cleanHost(c.host), lim = SC.range === "all" ? 0 : Date.now() - (+SC.range) * DAY, out = [], seen = {};
+  (S.hist || []).filter(function (r) { return r.host === host && (r.last || r.at) >= lim; }).sort(function (a, b) { return (a.last || a.at) - (b.last || b.at); }).forEach(function (r) {
+    var b = +(SC.who === "mine" ? r.myBest : r.best) || 0; if (!(b > 0) || seen[b]) return; seen[b] = 1;
+    out.push({ t: r.last || r.at, b: b, h: r.height || 0, k: "round" });
+  });
+  if (SC.who === "group" && S.tries && S.tries.key === host + "|" + (c.login || "")) S.tries.list.forEach(function (x) { if (x[0] >= lim && x[1] > 0) out.push({ t: x[0], b: x[1], w: x[2] || "", k: "try" }); });
+  return out.sort(function (a, b) { return a.t - b.t; });
+}
+function loadTries() {
+  var c = S.cfg || {}; if (statsKind(c) !== "ckpool") return Promise.resolve();
+  return getJ(RELAY + "history?t=" + Date.now()).then(function (j) { S.tries = { key: j.key || "", list: Array.isArray(j.tries) ? j.tries : [] }; }, function () {});
 }
 function oddsTxt() {
   var c = S.cfg || {}, net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff, d = S.pool && S.pool.d, hr = SC.who === "mine" ? (d && d.mine ? d.mine.h1h : 0) : (d ? d.h1h : 0);
@@ -64,9 +71,10 @@ function starHtml() {
   var SH = Math.max(210, Math.min(440, 130 + rows.length * 16));
   h += '<svg id="skySvg" viewBox="0 0 360 ' + SH + '" width="100%" role="img" aria-label="Night sky chart of our block tries. Zeros run across the bottom and time runs down the side."></svg>';
   var pk = rows[SC.pick] || rows.reduce(function (a, r) { return !a || r.b > a.b ? r : a; }, null);
-  if (pk) h += '<div class="skyPick"><span class="skyPickT">' + (rows[SC.pick] ? "This round" : "Best round") + '</span><b>' + bigFmt(pk.b) + ' &middot; ' + zf(pk.b).toFixed(1) + ' zeros</b><span>' + whenTxt(pk.t) + (pk.h ? ' &middot; block #' + n0(pk.h) : '') + '</span></div><p class="skyNote" style="text-align:center">Tap any dot or star to see its round.</p>';
+  if (pk) h += '<div class="skyPick"><span class="skyPickT">' + (rows[SC.pick] ? (pk.k === "try" ? "This try" : "This round") : "Best one") + '</span><b>' + bigFmt(pk.b) + ' &middot; ' + zf(pk.b).toFixed(1) + ' zeros</b><span>' + whenTxt(pk.t) + (pk.h ? ' &middot; block #' + n0(pk.h) : '') + (pk.w ? ' &middot; miner &hellip;' + esc(pk.w) : '') + '</span></div><p class="skyNote" style="text-align:center">Tap any dot or star to see it.</p>';
   h += '<div class="skyLuck skyOdds"><span class="skyLuckLbl">Odds of a block</span><span class="skyLuckNum">' + oddsTxt() + '</span></div>';
-  h += '<p class="skyNote">' + rows.length + (rows.length === 1 ? ' round' : ' rounds') + ' so far. Each dot is the best try of one block round (the pool only shares each round\'s best, not every try).</p>';
+  var nTry = rows.filter(function (r) { return r.k === "try"; }).length, nRound = rows.length - nTry;
+  h += '<p class="skyNote">' + nTry + (nTry === 1 ? ' try' : ' tries') + (nRound ? ' and ' + nRound + (nRound === 1 ? ' round best' : ' round bests') : '') + ' shown. A try is saved every time one miner in the group beats its own best share (checked every 2 minutes).</p>';
   return h + '</details>';
 }
 function wireSky() {
@@ -124,7 +132,7 @@ function wireSky() {
   el("text", { x: bx, y: T - 14, "text-anchor": "middle", "font-size": 12, fill: "#f2f2f5" }, "Block line" + (net ? " (" + need.toFixed(1) + ")" : ""));
   if (!rows.length) {
     el("text", { x: 180, y: 215, "text-anchor": "middle", "font-size": 16, fill: "rgba(255,255,255,0.75)" }, "No tries yet");
-    el("text", { x: 180, y: 238, "text-anchor": "middle", "font-size": 12, fill: "rgba(255,255,255,0.45)" }, "They show up as GitHub checks the pool.");
+    el("text", { x: 180, y: 238, "text-anchor": "middle", "font-size": 12, fill: "rgba(255,255,255,0.45)" }, "They show up as the pool gets checked.");
   } else {
     var t0 = rows[0].t, t1 = rows[rows.length - 1].t, n = rows.length;
     var pts = rows.map(function (r, i) { return [X(V(zf(r.b))), rowY(i, n), i, V(zf(r.b)), r]; });
@@ -191,6 +199,7 @@ function loadSaved() {
   return Promise.all([own("config.json"), own("data/pool.json"), own("data/earned.json"), own("data/pools.json"), own("data/pooldays.json"), own("data/status.json"), own("data/poolhist.json")]).then(function (r) {
     S.hist = Array.isArray(r[6]) ? r[6] : [];
     S.cfg = r[0]; S.pool = r[1]; S.earned = Array.isArray(r[2]) ? r[2] : []; S.pools = Array.isArray(r[3]) ? r[3] : []; S.days = r[4] || {}; S.status = r[5];
+    return loadTries();
   });
 }
 
