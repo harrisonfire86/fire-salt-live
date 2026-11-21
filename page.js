@@ -149,7 +149,7 @@ function wireSky() {
     });
     function starPts(sx, sy, R1) { var s2 = []; for (var k = 0; k < 10; k++) { var a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 === 0) ? R1 : R1 * 0.42; s2.push((sx + r * Math.cos(a)).toFixed(1) + "," + (sy + r * Math.sin(a)).toFixed(1)); } return s2.join(" "); }
     var usedY = [];
-    medalIdx.forEach(function (i) { var y = pts[i][1] - 9; while (usedY.some(function (u) { return Math.abs(u - y) < 30; })) y += 30; usedY.push(y); pts[i].ly = y; });
+    medalIdx.slice().sort(function (a, b) { return pts[a][1] - pts[b][1]; }).forEach(function (i) { var sy = pts[i][1], y = sy - 7; if (usedY.some(function (u) { return Math.abs(u - y) < 14; })) y = sy + 16; usedY.push(y); pts[i].ly = y; });
     medalIdx.slice().reverse().forEach(function (i) {
       var m = MED[medalIdx.indexOf(i)], p = pts[i], sx = p[0], sy = p[1], gid = "skyg" + i;
       var g = mk("linearGradient", { id: gid, gradientUnits: "userSpaceOnUse", x1: L, x2: sx, y1: 0, y2: 0 });
@@ -158,8 +158,9 @@ function wireSky() {
       var lg = el("line", { x1: L, x2: sx, y1: sy, y2: sy, stroke: "url(#" + gid + ")", "stroke-width": 9, "stroke-opacity": 0.7, filter: "url(#skyGlow)" });
       pulse(lg, "stroke-opacity", "0.3;0.85;0.3", m.d, m.b);
       el("line", { x1: L, x2: sx, y1: sy, y2: sy, stroke: "url(#" + gid + ")", "stroke-width": 2.5, "stroke-linecap": "round" });
-      el("text", { x: L + 6, y: p.ly, "font-size": 11, "font-weight": 600, fill: "#f2f2f5", stroke: BG, "stroke-width": 3, "paint-order": "stroke" }, bigFmt(p[4].b) + " · " + zf(p[4].b).toFixed(1) + " zeros");
-      el("text", { x: L + 6, y: p.ly + 23, "font-size": 10, fill: "rgba(255,255,255,0.8)", stroke: BG, "stroke-width": 3, "paint-order": "stroke" }, whenTxt(p[4].t));
+      var lt = el("text", { x: L + 6, y: p.ly, "font-size": 10, fill: "rgba(255,255,255,0.8)", stroke: BG, "stroke-width": 3, "paint-order": "stroke" });
+      lt.appendChild(mk("tspan", { "font-weight": 600, fill: "#f2f2f5" }, bigFmt(p[4].b) + " · " + zf(p[4].b).toFixed(1) + " zeros"));
+      lt.appendChild(mk("tspan", {}, " · " + whenTxt(p[4].t)));
       var sg = el("polygon", { points: starPts(sx, sy, m.r * 1.6), fill: m.c, "fill-opacity": 0.6, filter: "url(#skyGlow)" });
       pulse(sg, "fill-opacity", "0.25;0.85;0.25", m.d, m.b);
       var st = el("polygon", { points: starPts(sx, sy, m.r), fill: m.c, stroke: BG, "stroke-width": 2, "stroke-linejoin": "round" });
