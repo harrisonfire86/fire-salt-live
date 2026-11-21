@@ -1,1 +1,12 @@
-{}
+{
+ "2026-11-21 solo.ckpool.org": {
+  "day": "2026-11-21",
+  "host": "solo.ckpool.org",
+  "coin": "btc",
+  "checks": 1,
+  "maxH1h": 431000000000000000,
+  "best": 1339175596769.2576,
+  "myBest": 0,
+  "last": 1795275830288
+ }
+}

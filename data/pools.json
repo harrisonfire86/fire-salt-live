@@ -1,1 +1,10 @@
-[]
+[
+ {
+  "host": "solo.ckpool.org",
+  "port": "3333",
+  "coin": "btc",
+  "type": "solo",
+  "login": "3Gk1GfP3bHA6M2ZzK5mHdqbWN1iNsqAenH",
+  "from": 1795275830288
+ }
+]
