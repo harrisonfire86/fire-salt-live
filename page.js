@@ -169,11 +169,14 @@ function statusTxt() {
   return t;
 }
 function drawAll() {
-  var ae = document.activeElement; if (ae && ae.tagName === "SELECT") return;
+  var ae = document.activeElement; if (ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && $("main").contains(ae)) { S.dirty = true; return; }
+  var open = {}; Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d, i) { open[i] = d.open; });
   var h = '<div style="text-align:center"><button class="btn go" type="button" id="checkNow"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Checking..." : "Check now") + '</button>' + (S.checkedAt ? '<p class="small">Checked ' + ago(S.checkedAt) + '.</p>' : '') + '</div>';
   h += poolHtml() + earnHtml() + histHtml();
-  h += '<section class="card" style="--c:var(--line)"><h2>Costs, spends and money put in</h2><p class="small">Those stay private on the Claude page.</p><a class="btn" href="https://claude.ai/artifact/PmE4ixmkv4VVWKyfbM1F7Y" target="_blank" rel="noopener">Open the Claude page</a></section>';
-  $("main").innerHTML = h; $("status").textContent = statusTxt();
+  if (window.privateHtml) h += window.privateHtml();
+  $("main").innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d, i) { if (open[i] !== undefined && d.id !== "earnCard") d.open = open[i]; });
+  if (window.privateWire) window.privateWire(); $("status").textContent = statusTxt();
   $("checkNow").onclick = checkNow;
   var fr = $("fRange"), fc = $("fCoin"), ec = $("earnCard");
   fr.onchange = function () { S.ui.range = fr.value; S.ui.open = true; fr.blur(); drawAll(); };
@@ -187,3 +190,4 @@ setInterval(function () { if (!document.hidden) drawChips(); }, 1000);
 setInterval(function () { if (!document.hidden) { liveBlocks(); } }, 60000);
 setInterval(function () { if (!document.hidden && !S.busy) { loadSaved().then(livePool).then(drawAll); } }, 120000);
 document.addEventListener("visibilitychange", function () { if (!document.hidden) checkNow(); });
+document.addEventListener("focusout", function () { setTimeout(function () { var ae = document.activeElement; if (S.dirty && !(ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName))) { S.dirty = false; drawAll(); } }, 300); });
