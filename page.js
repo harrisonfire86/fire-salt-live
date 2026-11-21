@@ -175,6 +175,8 @@ function wireStars() {
   if (w) w.onchange = function () { SC.who = w.value; SC.pick = -1; w.blur(); drawAll(); };
   wireSky();
 }
+var RELAY = "https://fire-salt-relay.harrisonfire86.workers.dev/";
+function hNum(s) { var m = /^([0-9.]+)\s*([kKMGTPE]?)$/.exec(String(s == null ? "" : s)); if (!m) return 0; return Number(m[1]) * ({ "": 1, k: 1e3, K: 1e3, M: 1e6, G: 1e9, T: 1e12, P: 1e15, E: 1e18 })[m[2]]; }
 function errTxt(e) { return String((e && e.message) || e || "error").slice(0, 100); }
 
 function getJ(url, text) {
@@ -200,10 +202,16 @@ function liveBlocks() {
 }
 function livePool() {
   var c = S.cfg, kind = statsKind(c); S.livePool = null; S.livePoolErr = "";
-  if (!c || !c.host || kind === "ckpool" || !kind) return Promise.resolve();
+  if (!c || !c.host || !kind) return Promise.resolve();
   var wal = c.coin === "bch" ? normBch(c.bchWallet) : (c.btcWallet || "").trim(), addr = (c.login || "").trim() || wal;
   if (!addr) return Promise.resolve();
-  var p = kind === "publicpool" ? getJ("https://public-pool.io:40557/api/client/" + addr).then(function (j) { var a = j.accounting || {}; return { h5m: +a.hashRateLast10Minutes || 0, h1h: +a.hashRateLastHour || 0, workers: j.workersCount || 0, live: j.workersCount || 0, last: a.latestShareAt ? Date.parse(a.latestShareAt) : 0, shares: +a.totalAcceptedShares || 0, best: +a.bestSubmissionDifficulty || 0, ever: +j.bestDifficulty || 0 }; })
+  var p = kind === "ckpool" ? getJ(RELAY + "?host=" + encodeURIComponent(cleanHost(c.host)) + "&addr=" + encodeURIComponent(addr) + "&t=" + Date.now()).then(function (j) {
+      if (j.hashrate5m === undefined) throw new Error(j.error || "pool does not know this address yet");
+      var w = j.worker || [], t = Date.now() / 1000, d = { h5m: hNum(j.hashrate5m), h1h: hNum(j.hashrate1hr), workers: j.workers || w.length, live: w.filter(function (x) { return x.lastshare && t - x.lastshare < 600 && hNum(x.hashrate5m) > 0; }).length, last: (j.lastshare || 0) * 1000, shares: +j.shares || 0, best: +j.bestshare || 0, ever: +j.bestever || 0, mine: null };
+      if (c.login && wal) w.forEach(function (x) { if (String(x.workername || "").indexOf(wal) >= 0) d.mine = { h5m: hNum(x.hashrate5m), h1h: hNum(x.hashrate1hr), last: (x.lastshare || 0) * 1000, shares: +x.shares || 0, best: +x.bestshare || 0, ever: +x.bestever || 0 }; });
+      return d;
+    })
+    : kind === "publicpool" ? getJ("https://public-pool.io:40557/api/client/" + addr).then(function (j) { var a = j.accounting || {}; return { h5m: +a.hashRateLast10Minutes || 0, h1h: +a.hashRateLastHour || 0, workers: j.workersCount || 0, live: j.workersCount || 0, last: a.latestShareAt ? Date.parse(a.latestShareAt) : 0, shares: +a.totalAcceptedShares || 0, best: +a.bestSubmissionDifficulty || 0, ever: +j.bestDifficulty || 0 }; })
     : getJ("https://bch.solopool.org/api/accounts/" + normBch(addr)).then(function (j) { return { h5m: +j.currentHashrate || 0, h1h: +j.hashrate || 0, workers: j.workersOnline || 0, live: j.workersOnline || 0, last: j.stats && j.stats.lastShare ? j.stats.lastShare * 1000 : 0, blocks: j.stats ? +j.stats.blocksFound || 0 : 0 }; });
   return p.then(function (d) { S.livePool = d; S.livePool.at = Date.now(); }, function (e) { S.livePoolErr = errTxt(e); });
 }
@@ -264,7 +272,8 @@ function poolHtml() {
   var c = S.cfg, h = '<section class="card" style="--c:var(--blue)">';
   if (!c || !c.host) return h + '<h2>Mining now</h2><p class="dim">No pool set in config.json yet.</p></section>';
   var kind = statsKind(c), d = null, at = 0, src = "", err = "";
-  if (kind === "ckpool") { if (S.pool && S.pool.host === cleanHost(c.host)) { d = S.pool.d; at = S.pool.at; err = S.pool.err; } src = "GitHub job"; }
+  if (kind === "ckpool" && S.livePool) { d = S.livePool; at = d.at; src = "pool, live"; }
+  else if (kind === "ckpool") { if (S.pool && S.pool.host === cleanHost(c.host)) { d = S.pool.d; at = S.pool.at; err = S.livePoolErr || S.pool.err; } src = "GitHub job (live check not coming through" + (S.livePoolErr ? ": " + S.livePoolErr : "") + ")"; }
   else if (kind) { d = S.livePool; at = d ? d.at : 0; err = S.livePoolErr; src = "pool, live"; }
   var on = d && d.last && Date.now() - d.last < 15 * 60000;
   h += '<h2><span><span class="dot' + (on ? '' : ' off') + '"></span>Mining on ' + esc(cleanHost(c.host)) + '</span></h2>';
@@ -346,6 +355,7 @@ function drawAll() {
 drawChips(); drawAll(); checkNow();
 setInterval(function () { if (!document.hidden) drawChips(); }, 1000);
 setInterval(function () { if (!document.hidden) { liveBlocks(); } }, 60000);
+setInterval(function () { if (!document.hidden && !S.busy) { livePool().then(function () { var ae = document.activeElement; if (!(ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName))) drawAll(); }); } }, 30000);
 setInterval(function () { if (!document.hidden && !S.busy) { loadSaved().then(livePool).then(drawAll); } }, 120000);
 document.addEventListener("visibilitychange", function () { if (!document.hidden) checkNow(); });
 document.addEventListener("focusout", function () { setTimeout(function () { var ae = document.activeElement; if (S.dirty && !(ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName))) { S.dirty = false; drawAll(); } }, 300); });
