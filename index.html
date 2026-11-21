@@ -83,6 +83,18 @@ textarea.copy { position:absolute; left:-9999px; }
 .lrow.need { background:#1d2a22; }
 .lrow.need .lt { background:var(--green); color:#04140a; }
 .lrow.hit { background:#231d10; }
+.skyCard { background:#0b0f22; border:2px solid #2f3240; border-radius:14px; padding:12px 12px 8px; margin:14px 0; }
+.skyCard > summary { list-style:none; display:flex; align-items:center; gap:10px; cursor:pointer; margin:0 4px 4px; }
+.skyCard > summary::-webkit-details-marker { display:none; }
+.skyCard > summary::after { content:"+"; font-family:var(--gm); font-size:28px; line-height:1; color:#fff; margin-left:4px; }
+.skyCard[open] > summary::after { content:"\2013"; margin-left:auto; }
+.skyTitle { font-size:18px; font-weight:700; color:#f2f2f5; }
+.skyBest { margin-left:auto; color:#ffd34d; font-weight:700; font-size:15px; }
+.skyCard[open] .skyBest { display:none; }
+.skyLuck { display:flex; justify-content:space-between; align-items:baseline; margin:6px 4px 4px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.12); }
+.skyLuckLbl { font-size:16px; color:#a9abb8; }
+.skyLuckNum { font-size:20px; font-weight:800; color:#f2f2f5; }
+.skyNote { margin:6px 4px 2px; font-size:13px; color:#a9abb8; line-height:1.3; }
 </style>
 </head>
 <body>
@@ -101,7 +113,7 @@ textarea.copy { position:absolute; left:-9999px; }
   <main id="main"></main>
   <div class="status" id="status"></div>
 </div>
-<script src="page.js?v=6"></script>
-<script src="private.js?v=6"></script>
+<script src="page.js?v=7"></script>
+<script src="private.js?v=7"></script>
 </body>
 </html>

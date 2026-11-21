@@ -37,49 +37,127 @@ function ladderHtml(coin, best, ever, mine) {
   h += '</div>' + (net ? '<p class="small">A ' + coin.toUpperCase() + ' block right now needs a difficulty of ' + bigFmt(net) + ' (' + need + ' zeros), from the latest block.</p>' : '<p class="small">Waiting for the latest block to know what a block needs.</p>');
   return h + '</details>';
 }
-/* ---------- star chart: one star per block round, placed by how many zeros its best try had ---------- */
-var SC = { range: "7", who: "group", pick: -1 };
+/* ---------- "Block tries" night-sky star chart (the original design), fed with real rounds ----------
+   Each dot is one block round: how many zeros its best try had (left to right), oldest at the top, newest at the bottom.
+   Dots turn blue -> purple -> red near the block line. Gold, silver and bronze stars mark the three best rounds. */
+var SC = { range: "7", who: "group" };
 function zf(d) { return d > 0 ? 8 + Math.log(d) / Math.log(16) : 0; }
 function starRows() {
-  var c = S.cfg || {}, host = cleanHost(c.host), now = Date.now(), lim = SC.range === "all" ? 0 : now - (+SC.range) * DAY;
-  return (S.hist || []).filter(function (r) { return r.host === host && (r.last || r.at) >= lim; }).map(function (r) {
-    var b = SC.who === "mine" ? r.myBest : r.best; return { t: r.last || r.at, b: +b || 0, h: r.height || 0 };
-  }).filter(function (r) { return r.b > 0; });
+  var c = S.cfg || {}, host = cleanHost(c.host), lim = SC.range === "all" ? 0 : Date.now() - (+SC.range) * DAY;
+  return (S.hist || []).filter(function (r) { return r.host === host && (r.last || r.at) >= lim; })
+    .map(function (r) { return { t: r.last || r.at, b: +(SC.who === "mine" ? r.myBest : r.best) || 0, h: r.height || 0 }; })
+    .filter(function (r) { return r.b > 0; }).sort(function (a, b) { return a.t - b.t; });
+}
+function oddsTxt() {
+  var c = S.cfg || {}, net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff, d = S.pool && S.pool.d, hr = SC.who === "mine" ? (d && d.mine ? d.mine.h1h : 0) : (d ? d.h1h : 0);
+  if (!net || !(hr > 0)) return "--";
+  var perDay = hr * 86400 / (net * 4294967296);
+  return perDay >= 1 ? "about " + perDay.toFixed(1) + " a day" : "1 in " + Math.max(1, Math.round(1 / perDay)).toLocaleString("en-US") + " a day";
 }
 function starHtml() {
-  var c = S.cfg || {}; if (!c.host || statsKind(c) !== "ckpool" && statsKind(c) !== "publicpool") return "";
-  var rows = starRows(), net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff, need = net ? zf(net) : 0, hasMine = (S.hist || []).some(function (r) { return r.myBest > 0; });
-  var h = '<details class="card" style="--c:var(--purple)" id="starCard" open><summary><h2>Star chart</h2><div class="dim">Each star is one block round: how close its best try got</div></summary>';
-  h += '<div class="row2"><select id="scRange">' + [["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["all", "All saved"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.range ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
+  var c = S.cfg || {}; if (!c.host || (statsKind(c) !== "ckpool" && statsKind(c) !== "publicpool")) return "";
+  var rows = starRows(), net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff, top = rows.reduce(function (a, r) { return Math.max(a, r.b); }, 0), hasMine = (S.hist || []).some(function (r) { return r.myBest > 0; });
+  var h = '<details class="skyCard" id="starCard" open><summary class="skyHead"><span class="skyTitle">Block tries</span><span class="skyBest">' + (top ? 'Best: ' + zf(top).toFixed(1) + ' zeros &#9733;' : 'Best: none yet') + '</span></summary>';
+  h += '<div class="row2" style="margin:6px 0 4px"><select id="scRange">' + [["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["all", "All saved"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.range ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
   h += '<select id="scWho">' + [["group", c.login ? "Whole group" : "Our address"], ["mine", "Our miner only"]].filter(function (o) { return o[0] === "group" || hasMine; }).map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.who ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>';
-  if (!rows.length) return h + '<p class="dim">No stars yet for this pool. They fill in as GitHub checks the pool, about every 90 seconds while its job runs.</p></details>';
-  var W = 340, H = 230, L = 34, R = 8, T = 14, B = 24, t0 = Math.min.apply(null, rows.map(function (r) { return r.t; })), t1 = Math.max.apply(null, rows.map(function (r) { return r.t; }));
-  if (t1 - t0 < 3600000) { t0 = t1 - 3600000; }
-  var zs = rows.map(function (r) { return zf(r.b); }), lo = Math.floor(Math.min.apply(null, zs)) , hi = Math.ceil(Math.max(Math.max.apply(null, zs), need || 0) + 0.3);
-  if (hi - lo < 3) lo = hi - 3;
-  var X = function (t) { return L + (t - t0) / (t1 - t0 || 1) * (W - L - R); }, Y = function (z) { return T + (hi - z) / (hi - lo) * (H - T - B); };
-  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;margin-top:10px" id="scSvg">';
-  s += '<defs><radialGradient id="sg"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#ffe9a8"/><stop offset="1" stop-color="#b57bff" stop-opacity="0"/></radialGradient></defs>';
-  for (var z = lo; z <= hi; z++) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(z) + '" y2="' + Y(z) + '" stroke="#22222c" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (Y(z) + 4) + '" fill="#8a8da0" font-size="10" text-anchor="end">' + z + '</text>';
-  if (need) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(need) + '" y2="' + Y(need) + '" stroke="#2dff7a" stroke-width="2" stroke-dasharray="6 4"/><text x="' + (W - R) + '" y="' + (Y(need) - 5) + '" fill="#2dff7a" font-size="10" font-weight="700" text-anchor="end">BLOCK LINE</text>';
-  var best = -1; rows.forEach(function (r, i) { if (best < 0 || r.b > rows[best].b) best = i; });
-  rows.forEach(function (r, i) {
-    var x = X(r.t), y = Y(zf(r.b)), big = i === best, sz = big ? 7 : 3.2 + Math.min(2.5, (zf(r.b) - lo) / (hi - lo) * 3), sel = i === SC.pick;
-    s += '<g data-star="' + i + '" style="cursor:pointer"><circle cx="' + x + '" cy="' + y + '" r="' + (sz * 2.6) + '" fill="url(#sg)" opacity="' + (big || sel ? .9 : .45) + '"><animate attributeName="opacity" values="' + (big ? ".9;.5;.9" : ".45;.2;.45") + '" dur="' + (3 + (i % 5)) + 's" repeatCount="indefinite"/></circle>';
-    s += '<path d="M' + x + ' ' + (y - sz) + ' L' + (x + sz * .3) + ' ' + (y - sz * .3) + ' L' + (x + sz) + ' ' + y + ' L' + (x + sz * .3) + ' ' + (y + sz * .3) + ' L' + x + ' ' + (y + sz) + ' L' + (x - sz * .3) + ' ' + (y + sz * .3) + ' L' + (x - sz) + ' ' + y + ' L' + (x - sz * .3) + ' ' + (y - sz * .3) + 'Z" fill="' + (big ? "#ffd27a" : "#fff") + '"' + (sel ? ' stroke="#2dd4bf" stroke-width="1.5"' : '') + '/><circle cx="' + x + '" cy="' + y + '" r="12" fill="transparent"/></g>';
-  });
-  s += '<text x="' + L + '" y="' + (H - 6) + '" fill="#8a8da0" font-size="10">' + niceDay(t0).replace(/, \d{4}/, "") + '</text><text x="' + (W - R) + '" y="' + (H - 6) + '" fill="#8a8da0" font-size="10" text-anchor="end">' + niceDay(t1).replace(/, \d{4}/, "") + '</text></svg>';
-  h += s;
-  var p = rows[SC.pick] || rows[best];
-  h += '<div class="stat" style="margin-top:8px"><small>' + (SC.pick >= 0 && rows[SC.pick] ? "This star" : "Brightest star") + (p.h ? " &middot; block round #" + n0(p.h) : "") + '</small><b>' + zf(p.b).toFixed(1) + ' zeros &middot; ' + bigFmt(p.b) + '</b><small>' + niceDay(p.t) + (need ? ' &middot; block line is ' + need.toFixed(1) + ' zeros' : '') + '</small></div>';
-  h += '<p class="small">' + rows.length + (rows.length === 1 ? ' star, one round' : ' stars, one per round') + '. Tap a star to see it. Rounds shorter than a check (about 90 seconds) can be missed, and the pool only shares each round\'s best try, not every try.</p>';
+  h += '<svg id="skySvg" viewBox="0 0 360 440" width="100%" role="img" aria-label="Night sky chart of our block tries. Zeros run across the bottom and time runs down the side."></svg>';
+  h += '<div class="skyLuck skyOdds"><span class="skyLuckLbl">Odds of a block</span><span class="skyLuckNum">' + oddsTxt() + '</span></div>';
+  h += '<p class="skyNote">' + rows.length + (rows.length === 1 ? ' round' : ' rounds') + ' so far. Each dot is the best try of one block round (the pool only shares each round\'s best, not every try).</p>';
   return h + '</details>';
+}
+function wireSky() {
+  var svg = document.getElementById("skySvg"); if (!svg) return;
+  var c = S.cfg || {}, rows = starRows(), net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff;
+  var NS = "http://www.w3.org/2000/svg", L = 40, R = 340, T = 40, B = 390, BG = "#0b0f22";
+  var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function mk(n, a, t) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); if (t !== undefined) e.textContent = t; return e; }
+  function el(n, a, t) { var e = mk(n, a, t); svg.appendChild(e); return e; }
+  function pulse(node, attr, vals, dur, begin) {
+    if (still) return;
+    var a = mk("animate", { attributeName: attr, values: vals, dur: dur + "s", begin: begin + "s", repeatCount: "indefinite", calcMode: "spline" }), parts = vals.split(";");
+    a.setAttribute("keySplines", parts.slice(1).map(function () { return "0.45 0 0.55 1"; }).join(";"));
+    a.setAttribute("keyTimes", parts.map(function (_, i) { return (i / (parts.length - 1)).toFixed(3); }).join(";"));
+    node.appendChild(a);
+  }
+  var seed = 11; function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  // zeros scale: block line sits where the original had it (9 of 10)
+  var zs = rows.map(function (r) { return zf(r.b); }), need = net ? zf(net) : (zs.length ? Math.ceil(Math.max.apply(null, zs)) + 1 : 20);
+  var zlo = zs.length ? Math.floor(Math.min(Math.min.apply(null, zs), need - 2)) : Math.floor(need) - 6;
+  function V(z) { return Math.max(0, Math.min(9.9, 9 * (z - zlo) / (need - zlo))); }
+  function X(v) { return L + (v / 10) * (R - L); }
+  var bx = X(9);
+  var defs = mk("defs", {}); svg.appendChild(defs);
+  defs.innerHTML = '<filter id="skyGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="360" height="440"><feGaussianBlur stdDeviation="3.5"/></filter><filter id="skyHaze" filterUnits="userSpaceOnUse" x="-100" y="-100" width="560" height="640"><feGaussianBlur stdDeviation="30"/></filter>';
+  var haze = el("g", { filter: "url(#skyHaze)" });
+  [[100, 120, 80, "#3b7bff", 0.20, [100, 130, 95], [120, 140, 110], 50], [210, 300, 90, "#8a4fe0", 0.22, [210, 285, 230], [300, 320, 290], 62], [250, 170, 70, "#6a5af0", 0.16, [250, 190, 235], [170, 150, 185], 44], [bx, 230, 60, "#f0505a", 0.16, [bx, bx + 20, bx - 12], [230, 210, 240], 56]].forEach(function (k) {
+    var e = mk("circle", { cx: k[0], cy: k[1], r: k[2], fill: k[3], "fill-opacity": k[4] });
+    if (!still) {
+      e.appendChild(mk("animate", { attributeName: "cx", values: k[5].join(";") + ";" + k[5][0], dur: k[7] + "s", repeatCount: "indefinite", calcMode: "spline", keyTimes: "0;0.33;0.66;1", keySplines: "0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1" }));
+      e.appendChild(mk("animate", { attributeName: "cy", values: k[6].join(";") + ";" + k[6][0], dur: (k[7] + 9) + "s", repeatCount: "indefinite", calcMode: "spline", keyTimes: "0;0.33;0.66;1", keySplines: "0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1" }));
+    }
+    haze.appendChild(e);
+  });
+  var sky = el("g", {}), bg = [];
+  for (var s = 0; s < 70; s++) bg.push([rnd() * 360, rnd() * 440, 0.5 + rnd() * 0.9, 0.15 + rnd() * 0.4, rnd() < 0.2]);
+  [0, 360].forEach(function (off) { bg.forEach(function (b) { var k = mk("circle", { cx: b[0] + off, cy: b[1], r: b[2], fill: "#cfd8ff", "fill-opacity": b[3] }); if (b[4]) pulse(k, "fill-opacity", b[3] + ";" + (b[3] * 0.3).toFixed(2) + ";" + b[3], 5 + rnd() * 5, rnd() * 4); sky.appendChild(k); }); });
+  if (!still) sky.appendChild(mk("animateTransform", { attributeName: "transform", type: "translate", from: "0 0", to: "-360 0", dur: "160s", repeatCount: "indefinite" }));
+  function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+  function mix(c1, c2, t) { return "rgb(" + lerp(c1[0], c2[0], t) + "," + lerp(c1[1], c2[1], t) + "," + lerp(c1[2], c2[2], t) + ")"; }
+  var BLUE = [70, 150, 255], PURP = [160, 95, 240], RED = [240, 70, 80];
+  function heat(v) { if (v <= 3) return mix(BLUE, BLUE, 0); if (v < 5.8) return mix(BLUE, PURP, (v - 3) / 2.8); if (v < 9) return mix(PURP, RED, (v - 5.8) / 3.2); return mix(RED, RED, 0); }
+  for (var z = Math.ceil(zlo); z <= Math.floor(need); z++) {
+    var gx = X(V(z));
+    el("line", { x1: gx, x2: gx, y1: T, y2: B, stroke: "rgba(255,255,255,0.07)", "stroke-width": 1 });
+    if ((z - Math.ceil(zlo)) % (need - zlo > 8 ? 2 : 1) === 0) el("text", { x: gx, y: B + 16, "text-anchor": "middle", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, z);
+  }
+  el("text", { x: R, y: B + 32, "text-anchor": "end", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, "zeros");
+  el("text", { x: L - 6, y: T + 4, "text-anchor": "end", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, "start");
+  el("text", { x: L - 6, y: B + 4, "text-anchor": "end", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, "now");
+  el("line", { x1: bx, x2: bx, y1: T - 6, y2: B, stroke: "#f05a5a", "stroke-width": 1.5, "stroke-dasharray": "5 4" });
+  el("text", { x: bx, y: T - 14, "text-anchor": "middle", "font-size": 12, fill: "#f2f2f5" }, "Block line" + (net ? " (" + need.toFixed(1) + ")" : ""));
+  if (!rows.length) {
+    el("text", { x: 180, y: 215, "text-anchor": "middle", "font-size": 16, fill: "rgba(255,255,255,0.75)" }, "No tries yet");
+    el("text", { x: 180, y: 238, "text-anchor": "middle", "font-size": 12, fill: "rgba(255,255,255,0.45)" }, "They show up as GitHub checks the pool.");
+  } else {
+    var t0 = rows[0].t, t1 = rows[rows.length - 1].t, n = rows.length;
+    var pts = rows.map(function (r, i) { var y = n < 2 ? (T + B) / 2 : T + 10 + (r.t - t0) / ((t1 - t0) || 1) * (B - T - 20); return [X(V(zf(r.b))), y, i, V(zf(r.b)), r]; });
+    var order = rows.map(function (r, i) { return i; }).sort(function (a, b) { return rows[b].b - rows[a].b; }), medalIdx = order.slice(0, 3);
+    var MED = [{ c: "#ffc61a", r: 12, d: 3.6, b: 0 }, { c: "#b9c4ea", r: 10, d: 4.4, b: 1.3 }, { c: "#f08a45", r: 9, d: 5, b: 2.4 }];
+    var animEvery = Math.max(1, Math.ceil(n / 120));
+    pts.forEach(function (p) {
+      if (medalIdx.indexOf(p[2]) >= 0) return;
+      var col = heat(p[3]);
+      el("circle", { cx: p[0], cy: p[1], r: 7, fill: col, "fill-opacity": 0.10 });
+      var halo = el("circle", { cx: p[0], cy: p[1], r: 4.6, fill: col, "fill-opacity": 0.22 });
+      if (p[2] % animEvery === 0) pulse(halo, "fill-opacity", "0.14;0.32;0.14", 5 + rnd() * 5, rnd() * 6);
+      el("circle", { cx: p[0], cy: p[1], r: 2.4, fill: col, "fill-opacity": 0.98 });
+    });
+    function starPts(sx, sy, R1) { var s2 = []; for (var k = 0; k < 10; k++) { var a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 === 0) ? R1 : R1 * 0.42; s2.push((sx + r * Math.cos(a)).toFixed(1) + "," + (sy + r * Math.sin(a)).toFixed(1)); } return s2.join(" "); }
+    var usedY = [];
+    medalIdx.forEach(function (i) { var y = pts[i][1] - 9; while (usedY.some(function (u) { return Math.abs(u - y) < 17; })) y += 17; usedY.push(y); pts[i].ly = y; });
+    medalIdx.slice().reverse().forEach(function (i) {
+      var m = MED[medalIdx.indexOf(i)], p = pts[i], sx = p[0], sy = p[1], gid = "skyg" + i;
+      var g = mk("linearGradient", { id: gid, gradientUnits: "userSpaceOnUse", x1: L, x2: sx, y1: 0, y2: 0 });
+      g.innerHTML = '<stop offset="0" stop-color="' + m.c + '" stop-opacity="0.08"/><stop offset="0.6" stop-color="' + m.c + '" stop-opacity="0.55"/><stop offset="1" stop-color="' + m.c + '" stop-opacity="1"/>';
+      defs.appendChild(g);
+      var lg = el("line", { x1: L, x2: sx, y1: sy, y2: sy, stroke: "url(#" + gid + ")", "stroke-width": 9, "stroke-opacity": 0.7, filter: "url(#skyGlow)" });
+      pulse(lg, "stroke-opacity", "0.3;0.85;0.3", m.d, m.b);
+      el("line", { x1: L, x2: sx, y1: sy, y2: sy, stroke: "url(#" + gid + ")", "stroke-width": 2.5, "stroke-linecap": "round" });
+      el("text", { x: L + 6, y: p.ly, "font-size": 14, "font-weight": 500, fill: "#f2f2f5" }, bigFmt(p[4].b) + " · " + zf(p[4].b).toFixed(1) + " zeros");
+      var sg = el("polygon", { points: starPts(sx, sy, m.r * 1.6), fill: m.c, "fill-opacity": 0.6, filter: "url(#skyGlow)" });
+      pulse(sg, "fill-opacity", "0.25;0.85;0.25", m.d, m.b);
+      var st = el("polygon", { points: starPts(sx, sy, m.r), fill: m.c, stroke: BG, "stroke-width": 2, "stroke-linejoin": "round" });
+      pulse(st, "fill-opacity", "0.85;1;0.85", m.d, m.b);
+    });
+  }
+  el("line", { x1: L, x2: L, y1: T, y2: B, stroke: "rgba(255,255,255,0.25)" });
+  el("line", { x1: L, x2: R, y1: B, y2: B, stroke: "rgba(255,255,255,0.25)" });
 }
 function wireStars() {
   var r = $("scRange"), w = $("scWho");
-  if (r) r.onchange = function () { SC.range = r.value; SC.pick = -1; r.blur(); drawAll(); };
-  if (w) w.onchange = function () { SC.who = w.value; SC.pick = -1; w.blur(); drawAll(); };
-  Array.prototype.forEach.call(document.querySelectorAll("[data-star]"), function (g) { g.onclick = function () { SC.pick = +g.getAttribute("data-star"); drawAll(); }; });
+  if (r) r.onchange = function () { SC.range = r.value; r.blur(); drawAll(); };
+  if (w) w.onchange = function () { SC.who = w.value; w.blur(); drawAll(); };
+  wireSky();
 }
 function errTxt(e) { return String((e && e.message) || e || "error").slice(0, 100); }
 
