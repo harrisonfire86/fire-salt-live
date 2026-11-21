@@ -1,0 +1,9 @@
+{
+  "host": "solo.ckpool.org",
+  "port": "3333",
+  "coin": "btc",
+  "type": "solo",
+  "login": "3Gk1GfP3bHA6M2ZzK5mHdqbWN1iNsqAenH",
+  "btcWallet": "bc1qvx6chlchxrhqz42se5e0twxuqnhqkcssau7uwp",
+  "bchWallet": ""
+}
