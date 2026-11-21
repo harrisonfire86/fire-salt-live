@@ -21,6 +21,22 @@ function bigFmt(x) { if (!(x > 0)) return "0"; var u = ["", "K", "M", "G", "T", 
 function cleanHost(h) { return String(h || "").trim().replace(/^[a-z+]+:\/\//i, "").replace(/[/:].*$/, "").toLowerCase(); }
 function normBch(a) { return String(a || "").trim().toLowerCase().replace(/^bitcoincash:/, ""); }
 function statsKind(c) { if (!c) return ""; var h = cleanHost(c.host); if (/ckpool/.test(h)) return "ckpool"; if (/public-pool\.io/.test(h)) return "publicpool"; if (/solopool\.org/.test(h) && (c.coin === "bch" || String(c.port) === "9002")) return "solopool"; return ""; }
+function bitsToDiff(bits) { var e = bits >>> 24, m = bits & 0xffffff; return (0xffff / m) * Math.pow(256, 0x1d - e); }
+function zerosOf(d) { return d >= 1 ? 8 + Math.floor(Math.log(d) / Math.log(16) + 1e-9) : 8; }
+var LADDER_NAMES = ["", "16", "256", "4 thousand", "65 thousand", "1 million", "17 million", "268 million", "4.3 billion", "69 billion", "1.1 trillion", "17.6 trillion", "281 trillion", "4.5 quadrillion"];
+function ladderHtml(coin, best, ever, mine) {
+  var net = coin === "bch" ? S.live.bchDiff : S.live.btcDiff, need = net ? zerosOf(net) : 0;
+  var marks = {}; function mark(d, t) { if (d > 0) { var z = zerosOf(d); (marks[z] = marks[z] || []).push(t); } }
+  mark(best, "best this round"); mark(ever, "best ever"); if (mine) mark(mine, "our best");
+  var top = Math.max(need || 20, 20), h = '<details class="item"><summary><span class="l" style="font-weight:800;color:var(--teal)">What do these numbers mean?</span></summary>';
+  h += '<p class="small">Each try is like a lottery ticket. A block needs a ticket that starts with enough zeros. The best share number says how many times rarer a ticket was than the easiest one the pool counts (8 zeros). Each extra zero is 16 times rarer.</p><div class="ladder">';
+  for (var z = top; z >= 8; z--) {
+    var from = z === 8 ? "1" : LADDER_NAMES[z - 8] || "", isNeed = need && z === need, m = marks[z];
+    h += '<div class="lrow' + (isNeed ? " need" : "") + (m ? " hit" : "") + '"><span class="lz">' + z + ' zeros</span><span class="lv">' + (from ? from + " and up" : "") + '</span>' + (isNeed ? '<span class="lt">block needs this</span>' : '') + (m ? '<span class="lt">' + m.join(", ") + '</span>' : '') + '</div>';
+  }
+  h += '</div>' + (net ? '<p class="small">A ' + coin.toUpperCase() + ' block right now needs a difficulty of ' + bigFmt(net) + ' (' + need + ' zeros), from the latest block.</p>' : '<p class="small">Waiting for the latest block to know what a block needs.</p>');
+  return h + '</details>';
+}
 function errTxt(e) { return String((e && e.message) || e || "error").slice(0, 100); }
 
 function getJ(url, text) {
@@ -39,8 +55,8 @@ function loadSaved() {
 /* ---------- live, straight from the sites ---------- */
 function liveBlocks() {
   var L = S.live;
-  var btc = getJ("https://mempool.space/api/blocks/tip/hash", true).then(function (h) { return getJ("https://mempool.space/api/block/" + h.trim()); }).then(function (b) { L.btcH = b.height; L.btcT = b.timestamp * 1000; delete L.err.btc; }, function (e) { L.err.btc = errTxt(e); });
-  var bch = getJ("https://api.blockchain.info/haskoin-store/bch/block/best?notx=true").then(function (b) { L.bchH = b.height; L.bchT = b.time * 1000; delete L.err.bch; }, function (e) { L.err.bch = errTxt(e); });
+  var btc = getJ("https://mempool.space/api/blocks/tip/hash", true).then(function (h) { return getJ("https://mempool.space/api/block/" + h.trim()); }).then(function (b) { L.btcH = b.height; L.btcT = b.timestamp * 1000; if (b.difficulty) L.btcDiff = b.difficulty; delete L.err.btc; }, function (e) { L.err.btc = errTxt(e); });
+  var bch = getJ("https://api.blockchain.info/haskoin-store/bch/block/best?notx=true").then(function (b) { L.bchH = b.height; L.bchT = b.time * 1000; if (b.bits) L.bchDiff = bitsToDiff(b.bits); delete L.err.bch; }, function (e) { L.err.bch = errTxt(e); });
   return Promise.all([btc, bch]).then(function () { L.at = Date.now(); drawChips(); });
 }
 function livePool() {
@@ -123,6 +139,7 @@ function poolHtml() {
     if (kind === "solopool") h += '<div class="stat"><small>Blocks found</small><b>' + n0(d.blocks || 0) + '</b></div>';
     else h += '<div class="stat"><small>Best share (this round)</small><b>' + bigFmt(d.best) + '</b></div><div class="stat"><small>Best share ever</small><b>' + bigFmt(d.ever) + '</b></div>';
     h += '</div>';
+    if (kind !== "solopool") h += ladderHtml(c.coin, d.best, d.ever, d.mine ? d.mine.ever : 0);
     if (c.login && kind === "ckpool") {
       if (d.mine) h += '<p style="margin:10px 0 2px;font-weight:800">Our miner in this group</p><div class="grid2"><div class="stat"><small>Our hashrate (1 hour)</small><b>' + hFmt(d.mine.h1h) + '</b></div><div class="stat"><small>Our last share</small><b>' + (d.mine.last ? ago(d.mine.last) : "none yet") + '</b></div><div class="stat"><small>Our best share</small><b>' + bigFmt(d.mine.best) + '</b></div><div class="stat"><small>Our best ever</small><b>' + bigFmt(d.mine.ever) + '</b></div></div>';
       else h += '<p class="small">Our own miner is not in this group\'s worker list (looking for a worker named with our ' + esc(String(c.coin).toUpperCase()) + ' wallet).</p>';

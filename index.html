@@ -74,6 +74,15 @@ input, select { width:100%; background:#0a0a0f; color:var(--txt); border:1.5px s
 .status { font-size:13px; color:var(--dim); text-align:center; margin:16px 0; }
 .viewOnly .full { display:none !important; }
 textarea.copy { position:absolute; left:-9999px; }
+.ladder { margin-top:8px; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.lrow { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding:7px 10px; border-top:1px solid #1c1c24; font-size:14px; }
+.lrow:first-child { border-top:0; }
+.lz { font-weight:800; min-width:72px; }
+.lv { color:var(--dim); }
+.lt { font-size:12px; font-weight:800; padding:2px 8px; border-radius:999px; background:#2a2418; color:var(--gold); }
+.lrow.need { background:#1d2a22; }
+.lrow.need .lt { background:var(--green); color:#04140a; }
+.lrow.hit { background:#231d10; }
 </style>
 </head>
 <body>
