@@ -7,6 +7,8 @@ on:
   push:
     paths:
       - config.json
+      - scripts/collect.mjs
+      - .github/workflows/collect.yml
 
 permissions:
   contents: write
