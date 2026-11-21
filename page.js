@@ -40,7 +40,8 @@ function ladderHtml(coin, best, ever, mine) {
 /* ---------- "Block tries" night-sky star chart (the original design), fed with real rounds ----------
    Each dot is one block round: how many zeros its best try had (left to right), oldest at the top, newest at the bottom.
    Dots turn blue -> purple -> red near the block line. Gold, silver and bronze stars mark the three best rounds. */
-var SC = { range: "7", who: "group" };
+var SC = { range: "7", who: "group", pick: -1 };
+function whenTxt(t) { var d = new Date(t); return MON[d.getMonth()] + " " + d.getDate() + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
 function zf(d) { return d > 0 ? 8 + Math.log(d) / Math.log(16) : 0; }
 function starRows() {
   var c = S.cfg || {}, host = cleanHost(c.host), lim = SC.range === "all" ? 0 : Date.now() - (+SC.range) * DAY;
@@ -61,6 +62,8 @@ function starHtml() {
   h += '<div class="row2" style="margin:6px 0 4px"><select id="scRange">' + [["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["all", "All saved"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.range ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
   h += '<select id="scWho">' + [["group", c.login ? "Whole group" : "Our address"], ["mine", "Our miner only"]].filter(function (o) { return o[0] === "group" || hasMine; }).map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.who ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>';
   h += '<svg id="skySvg" viewBox="0 0 360 440" width="100%" role="img" aria-label="Night sky chart of our block tries. Zeros run across the bottom and time runs down the side."></svg>';
+  var pk = rows[SC.pick] || rows.reduce(function (a, r) { return !a || r.b > a.b ? r : a; }, null);
+  if (pk) h += '<div class="skyPick"><span class="skyPickT">' + (rows[SC.pick] ? "This round" : "Best round") + '</span><b>' + bigFmt(pk.b) + ' &middot; ' + zf(pk.b).toFixed(1) + ' zeros</b><span>' + whenTxt(pk.t) + (pk.h ? ' &middot; block #' + n0(pk.h) : '') + '</span></div><p class="skyNote" style="text-align:center">Tap any dot or star to see its round.</p>';
   h += '<div class="skyLuck skyOdds"><span class="skyLuckLbl">Odds of a block</span><span class="skyLuckNum">' + oddsTxt() + '</span></div>';
   h += '<p class="skyNote">' + rows.length + (rows.length === 1 ? ' round' : ' rounds') + ' so far. Each dot is the best try of one block round (the pool only shares each round\'s best, not every try).</p>';
   return h + '</details>';
@@ -111,8 +114,10 @@ function wireSky() {
     if ((z - Math.ceil(zlo)) % (need - zlo > 8 ? 2 : 1) === 0) el("text", { x: gx, y: B + 16, "text-anchor": "middle", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, z);
   }
   el("text", { x: R, y: B + 32, "text-anchor": "end", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, "zeros");
-  el("text", { x: L - 6, y: T + 4, "text-anchor": "end", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, "start");
-  el("text", { x: L - 6, y: B + 4, "text-anchor": "end", "font-size": 11, fill: "rgba(255,255,255,0.5)" }, "now");
+  if (rows.length) {
+    el("text", { x: L - 4, y: T - 14, "font-size": 9, fill: "rgba(255,255,255,0.5)" }, "From " + whenTxt(rows[0].t));
+    el("text", { x: L + 2, y: B + 30, "font-size": 9, fill: "rgba(255,255,255,0.5)" }, "To " + whenTxt(rows[rows.length - 1].t));
+  }
   el("line", { x1: bx, x2: bx, y1: T - 6, y2: B, stroke: "#f05a5a", "stroke-width": 1.5, "stroke-dasharray": "5 4" });
   el("text", { x: bx, y: T - 14, "text-anchor": "middle", "font-size": 12, fill: "#f2f2f5" }, "Block line" + (net ? " (" + need.toFixed(1) + ")" : ""));
   if (!rows.length) {
@@ -134,7 +139,7 @@ function wireSky() {
     });
     function starPts(sx, sy, R1) { var s2 = []; for (var k = 0; k < 10; k++) { var a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 === 0) ? R1 : R1 * 0.42; s2.push((sx + r * Math.cos(a)).toFixed(1) + "," + (sy + r * Math.sin(a)).toFixed(1)); } return s2.join(" "); }
     var usedY = [];
-    medalIdx.forEach(function (i) { var y = pts[i][1] - 9; while (usedY.some(function (u) { return Math.abs(u - y) < 17; })) y += 17; usedY.push(y); pts[i].ly = y; });
+    medalIdx.forEach(function (i) { var y = pts[i][1] - 9; while (usedY.some(function (u) { return Math.abs(u - y) < 30; })) y += 30; usedY.push(y); pts[i].ly = y; });
     medalIdx.slice().reverse().forEach(function (i) {
       var m = MED[medalIdx.indexOf(i)], p = pts[i], sx = p[0], sy = p[1], gid = "skyg" + i;
       var g = mk("linearGradient", { id: gid, gradientUnits: "userSpaceOnUse", x1: L, x2: sx, y1: 0, y2: 0 });
@@ -143,7 +148,8 @@ function wireSky() {
       var lg = el("line", { x1: L, x2: sx, y1: sy, y2: sy, stroke: "url(#" + gid + ")", "stroke-width": 9, "stroke-opacity": 0.7, filter: "url(#skyGlow)" });
       pulse(lg, "stroke-opacity", "0.3;0.85;0.3", m.d, m.b);
       el("line", { x1: L, x2: sx, y1: sy, y2: sy, stroke: "url(#" + gid + ")", "stroke-width": 2.5, "stroke-linecap": "round" });
-      el("text", { x: L + 6, y: p.ly, "font-size": 14, "font-weight": 500, fill: "#f2f2f5" }, bigFmt(p[4].b) + " · " + zf(p[4].b).toFixed(1) + " zeros");
+      el("text", { x: L + 6, y: p.ly, "font-size": 11, "font-weight": 600, fill: "#f2f2f5", stroke: BG, "stroke-width": 3, "paint-order": "stroke" }, bigFmt(p[4].b) + " · " + zf(p[4].b).toFixed(1) + " zeros");
+      el("text", { x: L + 6, y: p.ly + 23, "font-size": 10, fill: "rgba(255,255,255,0.8)", stroke: BG, "stroke-width": 3, "paint-order": "stroke" }, whenTxt(p[4].t));
       var sg = el("polygon", { points: starPts(sx, sy, m.r * 1.6), fill: m.c, "fill-opacity": 0.6, filter: "url(#skyGlow)" });
       pulse(sg, "fill-opacity", "0.25;0.85;0.25", m.d, m.b);
       var st = el("polygon", { points: starPts(sx, sy, m.r), fill: m.c, stroke: BG, "stroke-width": 2, "stroke-linejoin": "round" });
@@ -152,11 +158,20 @@ function wireSky() {
   }
   el("line", { x1: L, x2: L, y1: T, y2: B, stroke: "rgba(255,255,255,0.25)" });
   el("line", { x1: L, x2: R, y1: B, y2: B, stroke: "rgba(255,255,255,0.25)" });
+  if (rows.length) {
+    var t0b = rows[0].t, t1b = rows[rows.length - 1].t;
+    rows.forEach(function (r, i) {
+      var x = X(V(zf(r.b))), y = rows.length < 2 ? (T + B) / 2 : T + 10 + (r.t - t0b) / ((t1b - t0b) || 1) * (B - T - 20);
+      if (i === SC.pick) el("circle", { cx: x, cy: y, r: 9, fill: "none", stroke: "#2dd4bf", "stroke-width": 2 });
+      var hit = el("circle", { cx: x, cy: y, r: 11, fill: "transparent", style: "cursor:pointer" });
+      hit.addEventListener("click", function () { SC.pick = i; drawAll(); });
+    });
+  }
 }
 function wireStars() {
   var r = $("scRange"), w = $("scWho");
-  if (r) r.onchange = function () { SC.range = r.value; r.blur(); drawAll(); };
-  if (w) w.onchange = function () { SC.who = w.value; w.blur(); drawAll(); };
+  if (r) r.onchange = function () { SC.range = r.value; SC.pick = -1; r.blur(); drawAll(); };
+  if (w) w.onchange = function () { SC.who = w.value; SC.pick = -1; w.blur(); drawAll(); };
   wireSky();
 }
 function errTxt(e) { return String((e && e.message) || e || "error").slice(0, 100); }
