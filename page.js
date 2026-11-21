@@ -28,7 +28,7 @@ function ladderHtml(coin, best, ever, mine) {
   var net = coin === "bch" ? S.live.bchDiff : S.live.btcDiff, need = net ? zerosOf(net) : 0;
   var marks = {}; function mark(d, t) { if (d > 0) { var z = zerosOf(d); (marks[z] = marks[z] || []).push(t); } }
   mark(best, "best this round"); mark(ever, "best ever"); if (mine) mark(mine, "our best");
-  var top = Math.max(need || 20, 20), h = '<details class="item"><summary><span class="l" style="font-weight:800;color:var(--teal)">What do these numbers mean?</span></summary>';
+  var top = Math.max(need || 20, 20), h = '<details class="item"><summary><span class="l" style="font-weight:800;color:var(--teal)">Best share zeros breakdown</span></summary>';
   h += '<p class="small">A block needs a try with enough zeros in front. Each extra zero is 16 times harder. Best share numbers land on this ladder:</p><div class="ladder">';
   for (var z = top; z >= 15; z--) {
     var from = LADDER_NAMES[z - 8] || "", isNeed = need && z === need, m = marks[z];
@@ -287,11 +287,11 @@ function poolHtml() {
   if (!kind) h += '<p class="dim">This pool does not share stats we can read, so only wallet payouts are tracked.</p>';
   else if (!d) h += '<p class="dim">' + (err ? 'Pool stats not in yet: ' + esc(err) + '.' : (kind === "ckpool" ? 'Waiting for the first GitHub job run (every ~10 minutes).' : 'Loading...')) + '</p>';
   else {
-    h += '<div class="grid2"><div class="stat"><small>Hashrate (5 min)' + ib("h5m") + '</small><b>' + hFmt(d.h5m) + '</b></div><div class="stat"><small>Hashrate (1 hour)' + ib("h1h") + '</small><b>' + hFmt(d.h1h) + '</b></div>';
-    h += '<div class="stat"><small>Workers mining' + ib("work") + '</small><b>' + n0(d.live) + ' of ' + n0(d.workers) + '</b></div><div class="stat"><small>Last share' + ib("last") + '</small><b>' + (d.last ? ago(d.last) : "none yet") + '</b></div>';
-    if (kind === "solopool") h += '<div class="stat"><small>Blocks found' + ib("blocks") + '</small><b>' + n0(d.blocks || 0) + '</b></div>';
-    else h += '<div class="stat"><small>Best share (this round)' + ib("best") + '</small><b>' + bigFmt(d.best) + '</b></div><div class="stat"><small>Best share ever' + ib("ever") + '</small><b>' + bigFmt(d.ever) + '</b></div>';
-    h += '</div>' + (INFO_OPEN && INFO[INFO_OPEN] ? '<div class="ibBox">' + INFO[INFO_OPEN] + '</div>' : '');
+    h += '<div class="grid2"><div class="stat"><small>Hashrate (5 min)</small><b>' + hFmt(d.h5m) + '</b></div><div class="stat"><small>Hashrate (1 hour)</small><b>' + hFmt(d.h1h) + '</b></div>';
+    h += '<div class="stat"><small>Workers mining</small><b>' + n0(d.live) + ' of ' + n0(d.workers) + '</b></div><div class="stat"><small>Last share</small><b>' + (d.last ? ago(d.last) : "none yet") + '</b></div>';
+    if (kind === "solopool") h += '<div class="stat"><small>Blocks found</small><b>' + n0(d.blocks || 0) + '</b></div>';
+    else h += '<div class="stat"><small>Best share (this round)</small><b>' + bigFmt(d.best) + '</b></div><div class="stat"><small>Best share ever</small><b>' + bigFmt(d.ever) + '</b></div>';
+    h += '</div>';
     if (kind !== "solopool") h += ladderHtml(c.coin, d.best, d.ever, d.mine ? d.mine.ever : 0);
     if (c.login && kind === "ckpool") {
       if (d.mine) h += '<p style="margin:10px 0 2px;font-weight:800">Our miner in this group</p><div class="grid2"><div class="stat"><small>Our hashrate (1 hour)</small><b>' + hFmt(d.mine.h1h) + '</b></div><div class="stat"><small>Our last share</small><b>' + (d.mine.last ? ago(d.mine.last) : "none yet") + '</b></div><div class="stat"><small>Our best share</small><b>' + bigFmt(d.mine.best) + '</b></div><div class="stat"><small>Our best ever</small><b>' + bigFmt(d.mine.ever) + '</b></div></div>';
@@ -360,7 +360,6 @@ function drawAll() {
   $("main").innerHTML = h;
   Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d) { var k = dkey(d); if (open[k] !== undefined && d.id !== "earnCard") d.open = open[k]; });
   wireStars();
-  Array.prototype.forEach.call(document.querySelectorAll("[data-ib]"), function (b) { b.onclick = function () { var k = b.getAttribute("data-ib"); INFO_OPEN = INFO_OPEN === k ? "" : k; drawAll(); }; });
   if (window.privateWire) window.privateWire(); $("status").textContent = statusTxt();
   var fr = $("fRange"), fc = $("fCoin"), ec = $("earnCard");
   fr.onchange = function () { S.ui.range = fr.value; S.ui.open = true; fr.blur(); drawAll(); };
