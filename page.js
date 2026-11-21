@@ -29,9 +29,9 @@ function ladderHtml(coin, best, ever, mine) {
   var marks = {}; function mark(d, t) { if (d > 0) { var z = zerosOf(d); (marks[z] = marks[z] || []).push(t); } }
   mark(best, "best this round"); mark(ever, "best ever"); if (mine) mark(mine, "our best");
   var top = Math.max(need || 20, 20), h = '<details class="item"><summary><span class="l" style="font-weight:800;color:var(--teal)">What do these numbers mean?</span></summary>';
-  h += '<p class="small">Each try is like a lottery ticket. A block needs a ticket that starts with enough zeros. The best share number says how many times rarer a ticket was than the easiest one the pool counts (8 zeros). Each extra zero is 16 times rarer.</p><div class="ladder">';
-  for (var z = top; z >= 8; z--) {
-    var from = z === 8 ? "1" : LADDER_NAMES[z - 8] || "", isNeed = need && z === need, m = marks[z];
+  h += '<p class="small">A block needs a try with enough zeros in front. Each extra zero is 16 times harder. Best share numbers land on this ladder:</p><div class="ladder">';
+  for (var z = top; z >= 15; z--) {
+    var from = LADDER_NAMES[z - 8] || "", isNeed = need && z === need, m = marks[z];
     h += '<div class="lrow' + (isNeed ? " need" : "") + (m ? " hit" : "") + '"><span class="lz">' + z + ' zeros</span><span class="lv">' + (from ? from + " and up" : "") + '</span>' + (isNeed ? '<span class="lt">block needs this</span>' : '') + (m ? '<span class="lt">' + m.join(", ") + '</span>' : '') + '</div>';
   }
   h += '</div>' + (net ? '<p class="small">A ' + coin.toUpperCase() + ' block right now needs a difficulty of ' + bigFmt(net) + ' (' + need + ' zeros), from the latest block.</p>' : '<p class="small">Waiting for the latest block to know what a block needs.</p>');
@@ -61,7 +61,8 @@ function starHtml() {
   var h = '<details class="skyCard" id="starCard" open><summary class="skyHead"><span class="skyTitle">Block tries</span><span class="skyBest">' + (top ? 'Best: ' + zf(top).toFixed(1) + ' zeros &#9733;' : 'Best: none yet') + '</span></summary>';
   h += '<div class="row2" style="margin:6px 0 4px"><select id="scRange">' + [["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["all", "All saved"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.range ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
   h += '<select id="scWho">' + [["group", c.login ? "Whole group" : "Our address"], ["mine", "Our miner only"]].filter(function (o) { return o[0] === "group" || hasMine; }).map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === SC.who ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>';
-  h += '<svg id="skySvg" viewBox="0 0 360 440" width="100%" role="img" aria-label="Night sky chart of our block tries. Zeros run across the bottom and time runs down the side."></svg>';
+  var SH = Math.max(210, Math.min(440, 130 + rows.length * 16));
+  h += '<svg id="skySvg" viewBox="0 0 360 ' + SH + '" width="100%" role="img" aria-label="Night sky chart of our block tries. Zeros run across the bottom and time runs down the side."></svg>';
   var pk = rows[SC.pick] || rows.reduce(function (a, r) { return !a || r.b > a.b ? r : a; }, null);
   if (pk) h += '<div class="skyPick"><span class="skyPickT">' + (rows[SC.pick] ? "This round" : "Best round") + '</span><b>' + bigFmt(pk.b) + ' &middot; ' + zf(pk.b).toFixed(1) + ' zeros</b><span>' + whenTxt(pk.t) + (pk.h ? ' &middot; block #' + n0(pk.h) : '') + '</span></div><p class="skyNote" style="text-align:center">Tap any dot or star to see its round.</p>';
   h += '<div class="skyLuck skyOdds"><span class="skyLuckLbl">Odds of a block</span><span class="skyLuckNum">' + oddsTxt() + '</span></div>';
@@ -71,7 +72,7 @@ function starHtml() {
 function wireSky() {
   var svg = document.getElementById("skySvg"); if (!svg) return;
   var c = S.cfg || {}, rows = starRows(), net = c.coin === "bch" ? S.live.bchDiff : S.live.btcDiff;
-  var NS = "http://www.w3.org/2000/svg", L = 40, R = 340, T = 40, B = 390, BG = "#0b0f22";
+  var SH = svg.viewBox.baseVal.height || 440, NS = "http://www.w3.org/2000/svg", L = 40, R = 340, T = 40, B = SH - 50, BG = "#0b0f22";
   var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   function mk(n, a, t) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); if (t !== undefined) e.textContent = t; return e; }
   function el(n, a, t) { var e = mk(n, a, t); svg.appendChild(e); return e; }
@@ -258,15 +259,19 @@ function liveWallets() {
   return Promise.all(jobs.map(function (j) { return j.catch(function (e) { S.live.err.wallet = errTxt(e); }); })).then(function () { S.liveEarned = out; });
 }
 function checkNow() {
-  if (S.busy) return; S.busy = true; delete S.live.err.wallet; drawAll();
-  loadSaved().then(function () { return Promise.all([liveBlocks(), livePool(), liveWallets()]); }).then(function () { S.busy = false; S.checkedAt = Date.now(); drawAll(); });
+  if (S.busy) return; S.busy = true; var cb = $("checkNow"); if (cb) { cb.disabled = true; cb.innerHTML = "<small>&nbsp;</small><b>Checking</b><small>&nbsp;</small>"; } delete S.live.err.wallet; drawAll();
+  loadSaved().then(function () { return Promise.all([liveBlocks(), livePool(), liveWallets()]); }).then(function () { S.busy = false; S.checkedAt = Date.now(); var cb = $("checkNow"); if (cb) { cb.disabled = false; cb.innerHTML = "<small>&nbsp;</small><b>Check now</b><small>&nbsp;</small>"; } drawChips(); drawAll(); });
 }
 
 /* ---------- drawing ---------- */
+function sinceShort(t) { var x = Math.max(0, Math.floor((Date.now() - t) / 1000)), m = Math.floor(x / 60); return (m ? m + "m " : "") + p2(x % 60) + "s"; }
 function drawChips() {
-  var L = S.live;
-  $("chips").innerHTML = '<div class="chip"><small>BTC BLOCK</small><b>' + (L.btcH ? "#" + n0(L.btcH) : "--") + '</b><small>' + (L.btcT ? since(L.btcT) : "&nbsp;") + '</small></div><div class="chip"><small>BCH BLOCK</small><b>' + (L.bchH ? "#" + n0(L.bchH) : "--") + '</b><small>' + (L.bchT ? since(L.bchT) : "&nbsp;") + '</small></div>';
+  var L = S.live, coin = S.cfg && S.cfg.coin === "bch" ? "bch" : (S.cfg && S.cfg.coin ? "btc" : "");
+  function chip(k, h, t) { var on = coin === k; return '<div class="chip' + (on ? ' mining' : '') + '"><small>' + (on ? 'MINING ' : '') + k.toUpperCase() + ' BLOCK</small><b>' + (h ? "#" + n0(h) : "--") + '</b><small>' + (t ? sinceShort(t) : "&nbsp;") + '</small></div>'; }
+  $("chips").innerHTML = chip("btc", L.btcH, L.btcT) + chip("bch", L.bchH, L.bchT);
 }
+var INFO = {"h5m": "Average speed of everyone mining to this address over the last 5 minutes. It jumps around when miners join or leave.", "h1h": "Average speed over the last hour, so it is smoother. If 5 min is higher than 1 hour, miners just joined or sped up.", "work": "Miners that sent in a try in the last 10 minutes, out of every miner that has ever mined to this address.", "last": "When the pool last got a try good enough to count (a share). With miners running, this should be seconds ago.", "best": "The best try since the last block was found by anyone. Bigger number = more zeros = closer to a block.", "ever": "The best try this address has ever had. Renting in a group: it is the whole group's record. Your own miner: it is your miner's record.", "blocks": "Blocks this address has found on this pool."}, INFO_OPEN = "";
+function ib(k) { return ' <button class="ib' + (INFO_OPEN === k ? ' on' : '') + '" type="button" data-ib="' + k + '" aria-label="What is this?">i</button>'; }
 function tag(c) { c = String(c || "").toLowerCase(); return c ? '<span class="tag' + (c === "bch" ? " bch" : "") + '">' + c.toUpperCase() + '</span>' : ''; }
 function poolHtml() {
   var c = S.cfg, h = '<section class="card" style="--c:var(--blue)">';
@@ -282,11 +287,11 @@ function poolHtml() {
   if (!kind) h += '<p class="dim">This pool does not share stats we can read, so only wallet payouts are tracked.</p>';
   else if (!d) h += '<p class="dim">' + (err ? 'Pool stats not in yet: ' + esc(err) + '.' : (kind === "ckpool" ? 'Waiting for the first GitHub job run (every ~10 minutes).' : 'Loading...')) + '</p>';
   else {
-    h += '<div class="grid2"><div class="stat"><small>Hashrate (5 min)</small><b>' + hFmt(d.h5m) + '</b></div><div class="stat"><small>Hashrate (1 hour)</small><b>' + hFmt(d.h1h) + '</b></div>';
-    h += '<div class="stat"><small>Workers mining</small><b>' + n0(d.live) + ' of ' + n0(d.workers) + '</b></div><div class="stat"><small>Last share</small><b>' + (d.last ? ago(d.last) : "none yet") + '</b></div>';
-    if (kind === "solopool") h += '<div class="stat"><small>Blocks found</small><b>' + n0(d.blocks || 0) + '</b></div>';
-    else h += '<div class="stat"><small>Best share (this round)</small><b>' + bigFmt(d.best) + '</b></div><div class="stat"><small>Best share ever</small><b>' + bigFmt(d.ever) + '</b></div>';
-    h += '</div>';
+    h += '<div class="grid2"><div class="stat"><small>Hashrate (5 min)' + ib("h5m") + '</small><b>' + hFmt(d.h5m) + '</b></div><div class="stat"><small>Hashrate (1 hour)' + ib("h1h") + '</small><b>' + hFmt(d.h1h) + '</b></div>';
+    h += '<div class="stat"><small>Workers mining' + ib("work") + '</small><b>' + n0(d.live) + ' of ' + n0(d.workers) + '</b></div><div class="stat"><small>Last share' + ib("last") + '</small><b>' + (d.last ? ago(d.last) : "none yet") + '</b></div>';
+    if (kind === "solopool") h += '<div class="stat"><small>Blocks found' + ib("blocks") + '</small><b>' + n0(d.blocks || 0) + '</b></div>';
+    else h += '<div class="stat"><small>Best share (this round)' + ib("best") + '</small><b>' + bigFmt(d.best) + '</b></div><div class="stat"><small>Best share ever' + ib("ever") + '</small><b>' + bigFmt(d.ever) + '</b></div>';
+    h += '</div>' + (INFO_OPEN && INFO[INFO_OPEN] ? '<div class="ibBox">' + INFO[INFO_OPEN] + '</div>' : '');
     if (kind !== "solopool") h += ladderHtml(c.coin, d.best, d.ever, d.mine ? d.mine.ever : 0);
     if (c.login && kind === "ckpool") {
       if (d.mine) h += '<p style="margin:10px 0 2px;font-weight:800">Our miner in this group</p><div class="grid2"><div class="stat"><small>Our hashrate (1 hour)</small><b>' + hFmt(d.mine.h1h) + '</b></div><div class="stat"><small>Our last share</small><b>' + (d.mine.last ? ago(d.mine.last) : "none yet") + '</b></div><div class="stat"><small>Our best share</small><b>' + bigFmt(d.mine.best) + '</b></div><div class="stat"><small>Our best ever</small><b>' + bigFmt(d.mine.ever) + '</b></div></div>';
@@ -330,21 +335,33 @@ function statusTxt() {
   var bad = [], L = S.live;
   if (L.err.btc) bad.push("BTC block (" + L.err.btc + ")"); if (L.err.bch) bad.push("BCH block (" + L.err.bch + ")"); if (L.err.wallet) bad.push("wallet check (" + L.err.wallet + ")");
   var t = bad.length ? "Not coming through: " + bad.join(", ") + "." : (L.at ? "Live data on." : "Loading...");
+  if (S.checkedAt) t += " Check now: " + ago(S.checkedAt) + ".";
   t += S.status && S.status.at ? " GitHub job last ran " + ago(S.status.at) + "." : " GitHub job has not run yet.";
   return t;
+}
+function linksHtml() {
+  function a(u, t, d) { return '<a class="lnk" href="' + u + '" target="_blank" rel="noopener"><b>' + t + '</b><span>' + d + '</span></a>'; }
+  return '<details class="card" style="--c:var(--teal)" id="linksCard"><summary><h2>Links</h2><div class="dim">Pools, block explorers and charts</div></summary>'
+    + '<p class="lnkHead">Pools</p>' + a("https://solo.ckpool.org", "solo.ckpool.org", "BTC solo pool") + a("https://web.public-pool.io", "public-pool.io", "BTC solo pool for small miners") + a("https://bch.solopool.org", "bch.solopool.org", "BCH solo pool")
+    + '<p class="lnkHead">BTC blocks and data</p>' + a("https://mempool.space", "mempool.space", "Blocks, fees, difficulty") + a("https://bitbo.io", "Bitbo", "BTC charts")
+    + '<p class="lnkHead">BCH blocks and data</p>' + a("https://www.blockchain.com/explorer/blocks/bch", "Blockchain.com", "BCH block explorer") + a("https://www.coingecko.com/en/coins/bitcoin-cash", "CoinGecko", "BCH price")
+    + '<p class="lnkHead">Mining odds</p>' + a("https://whattomine.com", "WhatToMine", "What a miner earns") + a("https://www.coinwarz.com", "CoinWarz", "Difficulty and odds")
+    + '<p class="lnkHead">Our setup</p>' + a("https://github.com/harrisonfire86/fire-salt-live", "Our GitHub repo", "Site files and the checker") + a("https://dash.cloudflare.com", "Cloudflare", "The live pool relay")
+    + '</details>';
 }
 function drawAll() {
   var ae = document.activeElement; if (ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && $("main").contains(ae)) { S.dirty = true; return; }
   function dkey(d) { var card = d.closest("#main > *"), h = card && card.querySelector("h2"), ck = (card && card.id) || (h ? h.textContent.replace(/[^A-Za-z]/g, "").slice(0, 20) : "x"); if (d === card) return ck; return ck + ":" + Array.prototype.indexOf.call(card.querySelectorAll("details"), d); }
   var open = {}; Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d) { open[dkey(d)] = d.open; });
-  var h = '<div style="text-align:center"><button class="btn go" type="button" id="checkNow"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Checking..." : "Check now") + '</button>' + (S.checkedAt ? '<p class="small">Checked ' + ago(S.checkedAt) + '.</p>' : '') + '</div>';
+  var h = '';
   h += poolHtml() + starHtml() + earnHtml() + histHtml();
   if (window.privateHtml) h += window.privateHtml();
+  h += linksHtml();
   $("main").innerHTML = h;
   Array.prototype.forEach.call(document.querySelectorAll("#main details"), function (d) { var k = dkey(d); if (open[k] !== undefined && d.id !== "earnCard") d.open = open[k]; });
   wireStars();
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ib]"), function (b) { b.onclick = function () { var k = b.getAttribute("data-ib"); INFO_OPEN = INFO_OPEN === k ? "" : k; drawAll(); }; });
   if (window.privateWire) window.privateWire(); $("status").textContent = statusTxt();
-  $("checkNow").onclick = checkNow;
   var fr = $("fRange"), fc = $("fCoin"), ec = $("earnCard");
   fr.onchange = function () { S.ui.range = fr.value; S.ui.open = true; fr.blur(); drawAll(); };
   fc.onchange = function () { S.ui.coin = fc.value; S.ui.open = true; fc.blur(); drawAll(); };
@@ -352,7 +369,7 @@ function drawAll() {
   $("copyEarn").onclick = function () { var m = $("copyMsg"); navigator.clipboard.writeText(earnTsv()).then(function () { m.textContent = "Copied. Paste it into a spreadsheet."; }, function () { m.textContent = "Could not copy here."; }); };
 }
 (function stars() { var b = $("stars"), h = ""; for (var i = 0; i < 90; i++) h += '<i style="left:' + (Math.random() * 100).toFixed(2) + '%;top:' + (Math.random() * 100).toFixed(2) + '%;animation-delay:' + (Math.random() * 6).toFixed(1) + 's"></i>'; b.innerHTML = h; })();
-drawChips(); drawAll(); checkNow();
+drawChips(); drawAll(); $("checkNow").onclick = checkNow; checkNow();
 setInterval(function () { if (!document.hidden) drawChips(); }, 1000);
 setInterval(function () { if (!document.hidden) { liveBlocks(); } }, 60000);
 setInterval(function () { if (!document.hidden && !S.busy) { livePool().then(function () { var ae = document.activeElement; if (!(ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName))) drawAll(); }); } }, 30000);
