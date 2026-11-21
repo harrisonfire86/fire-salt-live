@@ -26,7 +26,7 @@ jobs:
       - name: Fetch pool stats and wallet payouts
         run: node scripts/collect.mjs
         env:
-          SAMPLES: ${{ github.event_name == 'schedule' && '12' || '1' }}
+          SAMPLES: '12'
       - name: Save the new data
         run: |
           git config user.name "fire-salt-bot"
