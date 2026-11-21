@@ -72,7 +72,7 @@ function starHtml() {
   h += s;
   var p = rows[SC.pick] || rows[best];
   h += '<div class="stat" style="margin-top:8px"><small>' + (SC.pick >= 0 && rows[SC.pick] ? "This star" : "Brightest star") + (p.h ? " &middot; block round #" + n0(p.h) : "") + '</small><b>' + zf(p.b).toFixed(1) + ' zeros &middot; ' + bigFmt(p.b) + '</b><small>' + niceDay(p.t) + (need ? ' &middot; block line is ' + need.toFixed(1) + ' zeros' : '') + '</small></div>';
-  h += '<p class="small">' + rows.length + (rows.length === 1 ? ' star' : ' stars') + ' (' + rows.length + ' rounds checked). Tap a star to see it. Rounds shorter than a check (about 90 seconds) can be missed, and the pool only shares each round\'s best try, not every try.</p>';
+  h += '<p class="small">' + rows.length + (rows.length === 1 ? ' star, one round' : ' stars, one per round') + '. Tap a star to see it. Rounds shorter than a check (about 90 seconds) can be missed, and the pool only shares each round\'s best try, not every try.</p>';
   return h + '</details>';
 }
 function wireStars() {
