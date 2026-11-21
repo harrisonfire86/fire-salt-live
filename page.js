@@ -88,6 +88,7 @@ function wireSky() {
   var zlo = zs.length ? Math.floor(Math.min(Math.min.apply(null, zs), need - 2)) : Math.floor(need) - 6;
   function V(z) { return Math.max(0, Math.min(9.9, 9 * (z - zlo) / (need - zlo))); }
   function X(v) { return L + (v / 10) * (R - L); }
+  function rowY(i, n) { return n < 2 ? (T + B) / 2 : T + 10 + i / (n - 1) * (B - T - 20); }
   var bx = X(9);
   var defs = mk("defs", {}); svg.appendChild(defs);
   defs.innerHTML = '<filter id="skyGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="360" height="440"><feGaussianBlur stdDeviation="3.5"/></filter><filter id="skyHaze" filterUnits="userSpaceOnUse" x="-100" y="-100" width="560" height="640"><feGaussianBlur stdDeviation="30"/></filter>';
@@ -125,7 +126,7 @@ function wireSky() {
     el("text", { x: 180, y: 238, "text-anchor": "middle", "font-size": 12, fill: "rgba(255,255,255,0.45)" }, "They show up as GitHub checks the pool.");
   } else {
     var t0 = rows[0].t, t1 = rows[rows.length - 1].t, n = rows.length;
-    var pts = rows.map(function (r, i) { var y = n < 2 ? (T + B) / 2 : T + 10 + (r.t - t0) / ((t1 - t0) || 1) * (B - T - 20); return [X(V(zf(r.b))), y, i, V(zf(r.b)), r]; });
+    var pts = rows.map(function (r, i) { return [X(V(zf(r.b))), rowY(i, n), i, V(zf(r.b)), r]; });
     var order = rows.map(function (r, i) { return i; }).sort(function (a, b) { return rows[b].b - rows[a].b; }), medalIdx = order.slice(0, 3);
     var MED = [{ c: "#ffc61a", r: 12, d: 3.6, b: 0 }, { c: "#b9c4ea", r: 10, d: 4.4, b: 1.3 }, { c: "#f08a45", r: 9, d: 5, b: 2.4 }];
     var animEvery = Math.max(1, Math.ceil(n / 120));
@@ -161,7 +162,7 @@ function wireSky() {
   if (rows.length) {
     var t0b = rows[0].t, t1b = rows[rows.length - 1].t;
     rows.forEach(function (r, i) {
-      var x = X(V(zf(r.b))), y = rows.length < 2 ? (T + B) / 2 : T + 10 + (r.t - t0b) / ((t1b - t0b) || 1) * (B - T - 20);
+      var x = X(V(zf(r.b))), y = rowY(i, rows.length);
       if (i === SC.pick) el("circle", { cx: x, cy: y, r: 9, fill: "none", stroke: "#2dd4bf", "stroke-width": 2 });
       var hit = el("circle", { cx: x, cy: y, r: 11, fill: "transparent", style: "cursor:pointer" });
       hit.addEventListener("click", function () { SC.pick = i; drawAll(); });
