@@ -82,5 +82,33 @@
   "best": 3188885791139.8184,
   "ever": 272328676618843,
   "myBest": null
+ },
+ {
+  "at": 1795311914438,
+  "last": 1795312005235,
+  "checks": 2,
+  "height": 976971,
+  "host": "solo.ckpool.org",
+  "coin": "btc",
+  "h1h": 19300000000000000,
+  "workers": 45,
+  "live": 31,
+  "best": 3188885791139.8184,
+  "ever": 272328676618843,
+  "myBest": null
+ },
+ {
+  "at": 1795312095530,
+  "last": 1795312911388,
+  "checks": 10,
+  "height": 976972,
+  "host": "solo.ckpool.org",
+  "coin": "btc",
+  "h1h": 15200000000000000,
+  "workers": 48,
+  "live": 31,
+  "best": 3188885791139.8184,
+  "ever": 272328676618843,
+  "myBest": null
  }
 ]
