@@ -14,5 +14,13 @@
   "type": "solo",
   "login": "t1d6D19SD7jFWo2qZFwDGy8kyu2usJ4wWHF",
   "from": 1795546557878
+ },
+ {
+  "host": "us1.solopool.org",
+  "port": "9003",
+  "coin": "ltc+doge",
+  "type": "solo",
+  "login": "ltc1qvk2zr4z4hy0ds0adevknwxmq4z9x3r5qnhjs26,D8X7uGyugi983edSihgrntHbkxELGRJMsX",
+  "from": 1795558016364
  }
 ]

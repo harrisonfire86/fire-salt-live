@@ -1,10 +1,10 @@
 {
- "at": 1795547548506,
- "host": "solo-zec.2miners.com",
- "coin": "zec",
+ "at": 1795559007013,
+ "host": "us1.solopool.org",
+ "coin": "ltc+doge",
  "type": "solo",
  "kind": "",
- "login": "t1d6D19SD7jFWo2qZFwDGy8kyu2usJ4wWHF",
+ "login": "ltc1qvk2zr4z4hy0ds0adevknwxmq4z9x3r5qnhjs26,D8X7uGyugi983edSihgrntHbkxELGRJMsX",
  "d": null,
  "err": "this pool does not share stats we can read"
 }
