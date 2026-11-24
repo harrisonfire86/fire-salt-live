@@ -33,10 +33,10 @@
   "day": "2026-11-24",
   "host": "solo.ckpool.org",
   "coin": "btc",
-  "checks": 12,
+  "checks": 24,
   "maxH1h": 825000000000000,
   "best": 3188885791139.8184,
   "myBest": 0,
-  "last": 1795503078861
+  "last": 1795544982187
  }
 }
