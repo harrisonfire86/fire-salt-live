@@ -1,9 +1,9 @@
 {
-  "host": "solo.ckpool.org",
-  "port": "3333",
-  "coin": "btc",
+  "host": "solo-zec.2miners.com",
+  "port": "1010",
+  "coin": "zec",
   "type": "solo",
-  "login": "3Gk1GfP3bHA6M2ZzK5mHdqbWN1iNsqAenH",
+  "login": "t1d6D19SD7jFWo2qZFwDGy8kyu2usJ4wWHF",
   "btcWallet": "bc1qvx6chlchxrhqz42se5e0twxuqnhqkcssau7uwp",
   "bchWallet": ""
 }
