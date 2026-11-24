@@ -1,7 +1,8 @@
 {
- "at": 1795543983522,
+ "at": 1795546557878,
  "log": [
-  "pool checks: 12 of 12 worked",
+  "pool switch logged",
+  "pool checks: 0 of 12 worked (this pool does not share stats we can read)",
   "payouts: 0 new, 0 total"
  ]
 }
