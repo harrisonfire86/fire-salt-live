@@ -1,9 +1,9 @@
 {
-  "host": "solo-zec.2miners.com",
-  "port": "1010",
-  "coin": "zec",
+  "host": "us1.solopool.org",
+  "port": "9003",
+  "coin": "ltc+doge",
   "type": "solo",
-  "login": "t1d6D19SD7jFWo2qZFwDGy8kyu2usJ4wWHF",
+  "login": "ltc1qvk2zr4z4hy0ds0adevknwxmq4z9x3r5qnhjs26,D8X7uGyugi983edSihgrntHbkxELGRJMsX",
   "btcWallet": "bc1qvx6chlchxrhqz42se5e0twxuqnhqkcssau7uwp",
   "bchWallet": ""
 }
